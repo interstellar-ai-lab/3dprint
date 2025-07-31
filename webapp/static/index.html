@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Generation Multi-Agent Web App</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .input-section {
+            grid-column: 1 / -1;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status-section {
+            grid-column: 1 / -1;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            background: #f8f9fa;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.generating {
+            background: #ffc107;
+        }
+
+        .status-dot.completed {
+            background: #28a745;
+        }
+
+        .status-dot.error {
+            background: #dc3545;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .image-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .generated-image {
+            max-width: 100%;
+            max-height: 400px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .evaluations {
+            margin-top: 20px;
+        }
+
+        .evaluation-item {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+        }
+
+        .evaluation-item h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .metadata-display {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #f5c6cb;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .container {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 3D Generation Multi-Agent</h1>
+            <p>Generate high-quality 3D CAD reconstruction materials using AI agents</p>
+        </div>
+
+        <div class="main-content">
+            <div class="card input-section">
+                <h2>🚀 Start Generation</h2>
+                <form id="generationForm">
+                    <div class="form-group">
+                        <label for="query">What would you like to generate?</label>
+                        <textarea 
+                            id="query" 
+                            name="query" 
+                            rows="3" 
+                            placeholder="e.g., a detailed dog model, a modern chair, a vintage car..."
+                            required
+                        ></textarea>
+                    </div>
+                    <button type="submit" class="btn" id="generateBtn">
+                        <span class="btn-text">Generate 3D Model</span>
+                        <span class="loading-spinner" style="display: none;"></span>
+                    </button>
+                </form>
+            </div>
+
+            <div class="card status-section" id="statusSection" style="display: none;">
+                <h2>📊 Generation Status</h2>
+                <div class="status-indicator">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span id="statusText">Initializing...</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div id="iterationInfo"></div>
+            </div>
+
+            <div class="card" id="imageSection" style="display: none;">
+                <h2>🖼️ Generated Image</h2>
+                <div class="image-container">
+                    <img id="generatedImage" class="generated-image" alt="Generated 3D model">
+                </div>
+            </div>
+
+            <div class="card" id="metadataSection" style="display: none;">
+                <h2>📋 Metadata</h2>
+                <div class="metadata-display" id="metadataDisplay"></div>
+            </div>
+
+            <div class="card" id="evaluationsSection" style="display: none;">
+                <h2>📈 Evaluations</h2>
+                <div id="evaluationsContainer"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentSessionId = null;
+        let statusCheckInterval = null;
+
+        document.getElementById('generationForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const query = document.getElementById('query').value.trim();
+            if (!query) return;
+
+            // Show loading state
+            const btn = document.getElementById('generateBtn');
+            const btnText = btn.querySelector('.btn-text');
+            const spinner = btn.querySelector('.loading-spinner');
+            
+            btn.disabled = true;
+            btnText.textContent = 'Starting Generation...';
+            spinner.style.display = 'inline-block';
+
+            try {
+                // Start generation
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ query })
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    currentSessionId = result.session_id;
+                    showStatusSection();
+                    startStatusPolling();
+                } else {
+                    throw new Error(result.detail || 'Failed to start generation');
+                }
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                // Reset button state
+                btn.disabled = false;
+                btnText.textContent = 'Generate 3D Model';
+                spinner.style.display = 'none';
+            }
+        });
+
+        function showStatusSection() {
+            document.getElementById('statusSection').style.display = 'block';
+        }
+
+        function startStatusPolling() {
+            if (statusCheckInterval) {
+                clearInterval(statusCheckInterval);
+            }
+            
+            statusCheckInterval = setInterval(async () => {
+                if (!currentSessionId) return;
+                
+                try {
+                    const response = await fetch(`/api/status/${currentSessionId}`);
+                    const status = await response.json();
+                    
+                    updateStatus(status);
+                    
+                    if (status.status === 'completed' || status.status === 'error') {
+                        clearInterval(statusCheckInterval);
+                        statusCheckInterval = null;
+                    }
+                } catch (error) {
+                    console.error('Error polling status:', error);
+                }
+            }, 2000);
+        }
+
+        function updateStatus(status) {
+            const statusText = document.getElementById('statusText');
+            const statusDot = document.getElementById('statusDot');
+            const progressFill = document.getElementById('progressFill');
+            const iterationInfo = document.getElementById('iterationInfo');
+
+            // Update status text and dot
+            statusText.textContent = getStatusDisplayText(status.status);
+            statusDot.className = `status-dot ${status.status}`;
+
+            // Update progress
+            const progress = Math.min((status.iteration / 5) * 100, 100);
+            progressFill.style.width = `${progress}%`;
+
+            // Update iteration info
+            if (status.iteration > 0) {
+                iterationInfo.innerHTML = `
+                    <strong>Iteration:</strong> ${status.iteration}/5<br>
+                    <strong>Query:</strong> ${status.query}
+                `;
+            }
+
+            // Show image if available
+            if (status.b64_image) {
+                showGeneratedImage(status.b64_image);
+            }
+
+            // Show metadata if available
+            if (status.metadata) {
+                showMetadata(status.metadata);
+            }
+
+            // Show evaluations if available
+            if (status.evaluations && status.evaluations.length > 0) {
+                showEvaluations(status.evaluations);
+            }
+
+            // Show error if any
+            if (status.error) {
+                showError(status.error);
+            }
+        }
+
+        function getStatusDisplayText(status) {
+            const statusMap = {
+                'starting': 'Initializing generation...',
+                'generating': 'Generating initial model...',
+                'evaluating_iteration_1': 'Evaluating iteration 1...',
+                'evaluating_iteration_2': 'Evaluating iteration 2...',
+                'evaluating_iteration_3': 'Evaluating iteration 3...',
+                'evaluating_iteration_4': 'Evaluating iteration 4...',
+                'evaluating_iteration_5': 'Evaluating iteration 5...',
+                'improving_iteration_1': 'Improving iteration 1...',
+                'improving_iteration_2': 'Improving iteration 2...',
+                'improving_iteration_3': 'Improving iteration 3...',
+                'improving_iteration_4': 'Improving iteration 4...',
+                'improving_iteration_5': 'Improving iteration 5...',
+                'completed': 'Generation completed!',
+                'error': 'Error occurred during generation'
+            };
+            return statusMap[status] || status;
+        }
+
+        function showGeneratedImage(b64Image) {
+            const imageSection = document.getElementById('imageSection');
+            const image = document.getElementById('generatedImage');
+            
+            image.src = `data:image/jpeg;base64,${b64Image}`;
+            imageSection.style.display = 'block';
+        }
+
+        function showMetadata(metadata) {
+            const metadataSection = document.getElementById('metadataSection');
+            const metadataDisplay = document.getElementById('metadataDisplay');
+            
+            metadataDisplay.textContent = metadata;
+            metadataSection.style.display = 'block';
+        }
+
+        function showEvaluations(evaluations) {
+            const evaluationsSection = document.getElementById('evaluationsSection');
+            const container = document.getElementById('evaluationsContainer');
+            
+            container.innerHTML = evaluations.map(eval => `
+                <div class="evaluation-item">
+                    <h4>Iteration ${eval.iteration}</h4>
+                    <p><strong>Summary:</strong> ${eval.short_summary}</p>
+                    <p><strong>Suggestions:</strong> ${eval.suggestions}</p>
+                    <details>
+                        <summary>View Full Report</summary>
+                        <div style="margin-top: 10px; padding: 10px; background: white; border-radius: 5px;">
+                            ${eval.markdown_report.replace(/\n/g, '<br>')}
+                        </div>
+                    </details>
+                </div>
+            `).join('');
+            
+            evaluationsSection.style.display = 'block';
+        }
+
+        function showError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = `Error: ${message}`;
+            
+            const container = document.querySelector('.container');
+            container.appendChild(errorDiv);
+            
+            // Remove error after 5 seconds
+            setTimeout(() => {
+                errorDiv.remove();
+            }, 5000);
+        }
+    </script>
+</body>
+</html> 
