@@ -7,8 +7,8 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, current_dir)
 sys.path.insert(0, parent_dir)
 
-# Import the FastAPI app from the local webapp directory
-from webapp.main import app
+# Import the FastAPI app directly
+from main import app
 
 # Export the app for Vercel
 handler = app 

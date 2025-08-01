@@ -33,7 +33,7 @@ app.add_middleware(
 )
 
 # Mount static files
-app.mount("/static", StaticFiles(directory="api/static"), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Store active sessions
 active_sessions: Dict[str, Dict[str, Any]] = {}
@@ -51,7 +51,7 @@ class GenerationResponse(BaseModel):
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
     """Serve the main HTML page"""
-    with open("api/static/index.html", "r") as f:
+    with open("static/index.html", "r") as f:
         return HTMLResponse(content=f.read())
 
 @app.post("/api/generate", response_model=GenerationResponse)
