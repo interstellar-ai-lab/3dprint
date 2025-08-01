@@ -526,7 +526,7 @@ async def download_images_locally(image_urls: list[str], session_id: str = None)
     import aiohttp
     
     # Create images directory
-    images_dir = pathlib.Path("generated_images")
+    images_dir = pathlib.Path("/tmp/generated_images")
     images_dir.mkdir(exist_ok=True)
     
     # Generate session ID if not provided
@@ -744,7 +744,7 @@ async def generate_3d_mesh_with_llm(metadata: str, image_urls: list[str]) -> str
     
     try:
         # Create output directory
-        out_dir = pathlib.Path("mesh_outputs")
+        out_dir = pathlib.Path("/tmp/mesh_outputs")
         out_dir.mkdir(exist_ok=True)
         
         # Generate a unique filename
@@ -971,7 +971,7 @@ async def main():
             b64_image, b64_mime_type = await download_image_to_base64(image_urls[0])
         # Second turn - agent automatically remembers previous context
         # Save the evaluation results separately for each iteration
-        out_dir = pathlib.Path(f"evaluation_reports_{iteration}"); out_dir.mkdir(exist_ok=True)
+        out_dir = pathlib.Path(f"/tmp/evaluation_reports_{iteration}"); out_dir.mkdir(exist_ok=True)
         
         # Generate mesh for this iteration using LLM
         mesh_path = await generate_3d_mesh_with_llm(metadata, image_urls)
@@ -1109,9 +1109,9 @@ async def main():
     for i in range(1, iteration + 1):
         final_html += f"""
             <li><strong>Iteration {i}:</strong> 
-                <a href="evaluation_reports_{i}/iteration_{i}_report.html" target="_blank">🎮 View Interactive Report</a> | 
-                <a href="evaluation_reports_{i}/iteration_{i}_report.md" target="_blank">📄 View Markdown Report</a> |
-                <a href="mesh_outputs/mesh_{i}.obj" target="_blank">📦 Download 3D Mesh</a>
+                                <a href="/tmp/evaluation_reports_{i}/iteration_{i}_report.html" target="_blank">🎮 View Interactive Report</a> |
+                <a href="/tmp/evaluation_reports_{i}/iteration_{i}_report.md" target="_blank">📄 View Markdown Report</a> |
+                <a href="/tmp/mesh_outputs/mesh_{i}.obj" target="_blank">📦 Download 3D Mesh</a>
             </li>
         """
     
@@ -1147,8 +1147,8 @@ async def main():
     print(f"📁 Final report: {final_path}")
     print(f"📸 Each iteration generated and displayed 16 images")
     print(f"🎮 Each iteration includes interactive 3D mesh viewer")
-    print(f"📦 3D mesh files saved in mesh_outputs/ folder")
-    print(f"📊 Detailed reports saved in evaluation_reports_* folders")
+    print(f"📦 3D mesh files saved in /tmp/mesh_outputs/ folder")
+    print(f"📊 Detailed reports saved in /tmp/evaluation_reports_* folders")
     print(f"{'='*60}")
     
     print("✅ All mesh data generated and saved successfully.")
