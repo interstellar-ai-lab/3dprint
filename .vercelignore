@@ -3,3 +3,12 @@ node_modules
 .DS_Store
 .env
 
+
+# Exclude src directory and other files from being treated as serverless functions
+src/
+api/generated_images/
+api/mesh_outputs/
+api/renders/
+api/__pycache__/
+**/tests/
+**/test_*.py
