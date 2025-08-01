@@ -13,12 +13,14 @@ import requests
 import aiohttp
 import html
 
+import os
+
 # API Keys for different providers
-OPENAI_API_KEY = ""
-CLAUDE_API_KEY = ""
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "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")
+CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY", "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")
 # Add your DeepSeek and Qwen API keys here when you have them
-DEEPSEEK_API_KEY = ""
-QWEN_API_KEY = ""
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+QWEN_API_KEY = os.getenv("QWEN_API_KEY", "")
 
 # OpenAI client for image generation (still needed for DALL-E)
 client = OpenAI(api_key=OPENAI_API_KEY)

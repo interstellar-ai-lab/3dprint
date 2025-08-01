@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "webapp/main.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/static/(.*)",
+      "dest": "/webapp/static/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/webapp/main.py"
+    }
+  ],
+  "functions": {
+    "webapp/main.py": {
+      "maxDuration": 300
+    }
+  },
+  "env": {
+    "PYTHONPATH": "."
+  }
+} 
