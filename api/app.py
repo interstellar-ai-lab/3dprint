@@ -3,12 +3,8 @@ from flask_cors import CORS
 import json
 import os
 import sys
-import uuid
+import uuid  # This is Python's built-in uuid module
 import pathlib
-import base64
-from PIL import Image
-import io
-import tempfile
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -185,4 +181,4 @@ def health():
     })
 
 if __name__ == '__main__':
-    app.run(debug=True) 
+    app.run(debug=True, port=8080) 
