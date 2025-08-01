@@ -30,8 +30,8 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - name: Install dependencies
-        run: make sync
+      # - name: Install dependencies
+      #   run: make sync
       - name: Build full docs
         run: make build-full-docs
 

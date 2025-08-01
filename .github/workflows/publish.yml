@@ -26,8 +26,8 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - name: Install dependencies
-        run: make sync
+      # - name: Install dependencies
+      #   run: make sync
       - name: Build package
         run: uv build
       - name: Publish to PyPI
