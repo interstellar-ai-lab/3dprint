@@ -22,5 +22,8 @@
     "env": {
       "PYTHONPATH": "."
     }
-  }
+  },
+  "includeFiles": [
+    "api/static/**"
+  ]
 } 

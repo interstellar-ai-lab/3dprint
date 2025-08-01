@@ -34,8 +34,8 @@ app.add_middleware(
 
 # Mount static files
 import os
-# Use relative path for Vercel deployment
-static_dir = "static"
+# Use robust path for Vercel deployment
+static_dir = os.path.join(os.path.dirname(__file__), "static")
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # Store active sessions
