@@ -1,154 +1,28 @@
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template, send_file
+from flask_cors import CORS
 import json
 import os
 import sys
+import uuid
+import pathlib
+import base64
+from PIL import Image
+import io
+import tempfile
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 app = Flask(__name__)
+CORS(app)
 
-# Simple HTML template
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Generation Web App</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }
-        .container {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: #333;
-            text-align: center;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        input[type="text"], textarea {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 16px;
-        }
-        button {
-            background-color: #007bff;
-            color: white;
-            padding: 12px 24px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        .status {
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 5px;
-        }
-        .status.success {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        .status.error {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        .status.info {
-            background-color: #d1ecf1;
-            color: #0c5460;
-            border: 1px solid #bee5eb;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>3D Generation Web App</h1>
-        <p>Welcome to the 3D Generation Web App! This is a simple, Vercel-compatible version.</p>
-        
-        <form id="generationForm">
-            <div class="form-group">
-                <label for="query">What would you like to generate?</label>
-                <textarea id="query" name="query" rows="4" placeholder="Describe what you want to generate in 3D..."></textarea>
-            </div>
-            <button type="submit">Start Generation</button>
-        </form>
-        
-        <div id="status" class="status" style="display: none;"></div>
-    </div>
-
-    <script>
-        document.getElementById('generationForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const query = document.getElementById('query').value;
-            const statusDiv = document.getElementById('status');
-            
-            if (!query.trim()) {
-                showStatus('Please enter a description', 'error');
-                return;
-            }
-            
-            showStatus('Starting generation...', 'info');
-            
-            try {
-                const response = await fetch('/api/generate', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ query: query })
-                });
-                
-                const result = await response.json();
-                
-                if (response.ok) {
-                    showStatus('Generation started successfully! Session ID: ' + result.session_id, 'success');
-                } else {
-                    showStatus('Error: ' + result.detail, 'error');
-                }
-            } catch (error) {
-                showStatus('Error: ' + error.message, 'error');
-            }
-        });
-        
-        function showStatus(message, type) {
-            const statusDiv = document.getElementById('status');
-            statusDiv.textContent = message;
-            statusDiv.className = 'status ' + type;
-            statusDiv.style.display = 'block';
-        }
-    </script>
-</body>
-</html>
-"""
+# Store active sessions (in production, use a proper database)
+active_sessions = {}
 
 @app.route('/')
 def home():
     """Serve the main page"""
-    return render_template_string(HTML_TEMPLATE)
+    return render_template('index.html')
 
 @app.route('/api/generate', methods=['POST'])
 def generate():
@@ -160,13 +34,33 @@ def generate():
         if not query:
             return jsonify({'error': 'Query is required'}), 400
         
-        # For now, just return a success response
+        # Generate a unique session ID
+        session_id = str(uuid.uuid4())
+        
+        # Initialize session data
+        active_sessions[session_id] = {
+            "status": "starting",
+            "query": query,
+            "iteration": 0,
+            "metadata": None,
+            "image_urls": [],
+            "b64_images": [],
+            "mime_types": [],
+            "mesh_file_path": None,
+            "mesh_filename": None,
+            "iteration_meshes": {},
+            "iteration_data": {},
+            "evaluations": [],
+            "error": None
+        }
+        
+        # For now, simulate the generation process
         # In the future, this would integrate with your multi-agent system
-        session_id = f"session_{hash(query) % 1000000}"
+        active_sessions[session_id]["status"] = "generating"
         
         return jsonify({
             'session_id': session_id,
-            'status': 'started',
+            'status': 'starting',
             'message': 'Generation started successfully',
             'query': query
         })
@@ -177,10 +71,109 @@ def generate():
 @app.route('/api/status/<session_id>')
 def get_status(session_id):
     """Get status of a generation session"""
+    if session_id not in active_sessions:
+        return jsonify({'error': 'Session not found'}), 404
+    
+    session_data = active_sessions[session_id]
+    
     return jsonify({
         'session_id': session_id,
-        'status': 'completed',
-        'message': 'This is a demo status endpoint'
+        'status': session_data['status'],
+        'query': session_data['query'],
+        'iteration': session_data['iteration'],
+        'metadata': session_data['metadata'],
+        'image_urls': session_data['image_urls'],
+        'b64_images': session_data['b64_images'],
+        'mime_types': session_data['mime_types'],
+        'mesh_file_path': session_data['mesh_file_path'],
+        'mesh_filename': session_data['mesh_filename'],
+        'iteration_meshes': session_data['iteration_meshes'],
+        'iteration_data': session_data['iteration_data'],
+        'evaluations': session_data['evaluations'],
+        'error': session_data['error']
+    })
+
+@app.route('/api/mesh/<session_id>')
+def get_generated_mesh(session_id):
+    """Get the generated mesh file for a session"""
+    if session_id not in active_sessions:
+        return jsonify({'error': 'Session not found'}), 404
+    
+    session_data = active_sessions[session_id]
+    if not session_data['mesh_file_path']:
+        return jsonify({'error': 'No mesh generated yet'}), 404
+    
+    mesh_path = pathlib.Path(session_data['mesh_file_path'])
+    if not mesh_path.exists():
+        return jsonify({'error': 'Mesh file not found'}), 404
+    
+    filename = session_data['mesh_filename'] or f"mesh_{session_id}.obj"
+    return send_file(
+        mesh_path,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/octet-stream'
+    )
+
+@app.route('/api/mesh/<session_id>/<int:iteration>')
+def get_iteration_mesh(session_id, iteration):
+    """Get the generated mesh file for a specific iteration"""
+    if session_id not in active_sessions:
+        return jsonify({'error': 'Session not found'}), 404
+    
+    session_data = active_sessions[session_id]
+    if iteration not in session_data['iteration_meshes']:
+        return jsonify({'error': f'No mesh found for iteration {iteration}'}), 404
+    
+    mesh_path = pathlib.Path(session_data['iteration_meshes'][iteration])
+    if not mesh_path.exists():
+        return jsonify({'error': 'Mesh file not found'}), 404
+    
+    filename = f"mesh_{session_id}_iteration_{iteration}.obj"
+    return send_file(
+        mesh_path,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/octet-stream'
+    )
+
+@app.route('/api/mesh-visualization/<session_id>/<int:iteration>')
+def get_mesh_visualization(session_id, iteration):
+    """Get PNG mesh visualization for a specific iteration"""
+    if session_id not in active_sessions:
+        return jsonify({'error': 'Session not found'}), 404
+    
+    session_data = active_sessions[session_id]
+    if iteration not in session_data['iteration_meshes']:
+        return jsonify({'error': f'No mesh found for iteration {iteration}'}), 404
+    
+    # Look for PNG file with same base name as the OBJ file
+    mesh_path = pathlib.Path(session_data['iteration_meshes'][iteration])
+    png_path = mesh_path.with_suffix('.png')
+    
+    if not png_path.exists():
+        return jsonify({'error': 'Mesh visualization not found'}), 404
+    
+    return send_file(
+        png_path,
+        as_attachment=True,
+        download_name=f"mesh_visualization_{session_id}_iteration_{iteration}.png",
+        mimetype='image/png'
+    )
+
+@app.route('/api/sessions')
+def list_sessions():
+    """List all active sessions"""
+    return jsonify({
+        'sessions': [
+            {
+                'session_id': session_id,
+                'status': data['status'],
+                'query': data['query'],
+                'iteration': data['iteration']
+            }
+            for session_id, data in active_sessions.items()
+        ]
     })
 
 @app.route('/api/health')
@@ -188,7 +181,7 @@ def health():
     """Health check endpoint"""
     return jsonify({
         'status': 'healthy',
-        'message': 'Flask app is running on Vercel'
+        'message': 'Flask app is running'
     })
 
 if __name__ == '__main__':
