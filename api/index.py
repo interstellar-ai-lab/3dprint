@@ -1,15 +1,14 @@
 import sys
 import os
 
-# Add the parent directory to the path so we can import from webapp
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add the current directory and parent directory to the path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, current_dir)
+sys.path.insert(0, parent_dir)
 
-# Import the FastAPI app from webapp/main.py
+# Import the FastAPI app from the local webapp directory
 from webapp.main import app
-
-# Update the static files mount to point to the api/static directory
-from fastapi.staticfiles import StaticFiles
-app.mount("/static", StaticFiles(directory="api/static"), name="static")
 
 # Export the app for Vercel
 handler = app 
