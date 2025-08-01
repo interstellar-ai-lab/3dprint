@@ -3,15 +3,15 @@
   "routes": [
     {
       "src": "/static/(.*)",
-      "dest": "/webapp/static/$1"
+      "dest": "/api/static/$1"
     },
     {
       "src": "/(.*)",
-      "dest": "/webapp/main.py"
+      "dest": "/api/index.py"
     }
   ],
   "functions": {
-    "webapp/main.py": {
+    "api/index.py": {
       "maxDuration": 300
     }
   },
