@@ -5,6 +5,7 @@ fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 python-multipart>=0.0.20
 Pillow>=10.4.0
+mangum>=0.17.0
 
 # Agents framework
 openai-agents>=0.1.0

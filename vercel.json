@@ -1,5 +1,11 @@
 {
   "version": 2,
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 300,
+      "runtime": "python3.11"
+    }
+  },
   "routes": [
     {
       "src": "/static/(.*)",
@@ -9,18 +15,5 @@
       "src": "/(.*)",
       "dest": "/api/index.py"
     }
-  ],
-  "functions": {
-    "api/index.py": {
-      "maxDuration": 300
-    }
-  },
-  "env": {
-    "PYTHONPATH": "."
-  },
-  "build": {
-    "env": {
-      "PYTHONPATH": "."
-    }
-  }
+  ]
 } 

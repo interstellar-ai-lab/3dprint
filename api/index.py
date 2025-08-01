@@ -10,5 +10,8 @@ sys.path.insert(0, parent_dir)
 # Import the FastAPI app directly
 from main import app
 
-# Export the app for Vercel
-handler = app 
+# Use mangum for AWS Lambda/Vercel compatibility
+from mangum import Mangum
+
+# Create the handler
+handler = Mangum(app) 
