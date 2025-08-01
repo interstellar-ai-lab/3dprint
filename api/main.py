@@ -34,7 +34,8 @@ app.add_middleware(
 
 # Mount static files
 import os
-static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+# Use relative path for Vercel deployment
+static_dir = "static"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # Store active sessions
@@ -53,7 +54,7 @@ class GenerationResponse(BaseModel):
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
     """Serve the main HTML page"""
-    html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "index.html")
+    html_path = os.path.join(os.path.dirname(__file__), "static", "index.html")
     with open(html_path, "r") as f:
         return HTMLResponse(content=f.read())
 
