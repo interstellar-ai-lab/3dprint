@@ -1,0 +1,35 @@
+{
+  "timestamp": "2025-08-03T16:49:14.795201",
+  "object_type": "dog",
+  "approach": "dalle3_only_direct_prompts",
+  "total_views": 4,
+  "individual_image_size": "1024x1024",
+  "model": "dall-e-3",
+  "individual_images": [
+    {
+      "index": 0,
+      "url": "https://oaidalleapiprodscus.blob.core.windows.net/private/org-uq1cJLQ7236pdzffE284JpZQ/user-DSi32wQFktJPJeXu91X58NLP/img-NMVpfjMDuIGFM41IL5JHOB38.png?st=2025-08-03T22%3A48%3A16Z&se=2025-08-04T00%3A48%3A16Z&sp=r&sv=2024-08-04&sr=b&rscd=inline&rsct=image/png&skoid=475fd488-6c59-44a5-9aa9-31c4db451bea&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2025-08-03T09%3A25%3A10Z&ske=2025-08-04T09%3A25%3A10Z&sks=b&skv=2024-08-04&sig=Yv0X%2BigRUwTvMAhW9JNYIagvGZGFO5RDeTOTuRlApbo%3D",
+      "angle_name": "Front View (0\u00b0)",
+      "prompt": "A professional photograph of a Golden Retriever dog standing on a pure white background. The dog has golden fur with cream-colored feathering on the chest and tail. Dark brown eyes, floppy ears, black nose. The dog is facing directly toward the camera at 0\u00b0 azimuth, looking straight ahead with direct eye contact. Full face, both eyes, nose, mouth, chest, and front legs clearly visible. Head-on shot, frontal perspective. Professional studio lighting, sharp focus, high quality. This is a single photograph from the front viewing angle only."
+    },
+    {
+      "index": 1,
+      "url": "https://oaidalleapiprodscus.blob.core.windows.net/private/org-uq1cJLQ7236pdzffE284JpZQ/user-DSi32wQFktJPJeXu91X58NLP/img-jBWeyFWjFxY3EmfFFuVPGgrg.png?st=2025-08-03T22%3A48%3A32Z&se=2025-08-04T00%3A48%3A32Z&sp=r&sv=2024-08-04&sr=b&rscd=inline&rsct=image/png&skoid=475fd488-6c59-44a5-9aa9-31c4db451bea&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2025-08-03T23%3A48%3A32Z&ske=2025-08-04T23%3A48%3A32Z&sks=b&skv=2024-08-04&sig=vjyD1E%2BUP7IHLc51w8L9gHMh16/EQ/L1sYRA7iG4G6s%3D",
+      "angle_name": "Left Profile (90\u00b0)",
+      "prompt": "A professional photograph of a Golden Retriever dog standing on a pure white background. The dog has golden fur with cream-colored feathering on the chest and tail. Dark brown eyes, floppy ears, black nose. The dog is turned 90\u00b0 to the left, showing the left profile. Camera positioned at 90\u00b0 azimuth, perpendicular to the dog's left side. Left ear, left eye, left side of face, left shoulder, left leg, and left side of body clearly visible. Head in pure profile view. Left profile shot, side view. Professional studio lighting, sharp focus, high quality. This is a single photograph from the left profile viewing angle only."
+    },
+    {
+      "index": 2,
+      "url": "https://oaidalleapiprodscus.blob.core.windows.net/private/org-uq1cJLQ7236pdzffE284JpZQ/user-DSi32wQFktJPJeXu91X58NLP/img-EKXQvJmGernb977wq9g5Pvfz.png?st=2025-08-03T22%3A48%3A47Z&se=2025-08-04T00%3A48%3A47Z&sp=r&sv=2024-08-04&sr=b&rscd=inline&rsct=image/png&skoid=475fd488-6c59-44a5-9aa9-31c4db451bea&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2025-08-03T09%3A00%3A26Z&ske=2025-08-04T09%3A00%3A26Z&sks=b&skv=2024-08-04&sig=JRvrGUze4pKFNdTEufZHDo8pUMcw0YIbb8BtG3mu1C0%3D",
+      "angle_name": "Back View (180\u00b0)",
+      "prompt": "A professional photograph of a Golden Retriever dog standing on a pure white background. The dog has golden fur with cream-colored feathering on the chest and tail. Dark brown eyes, floppy ears, black nose. The dog is facing away from the camera at 180\u00b0 azimuth, showing its back. Camera positioned directly behind the dog. Back of head, back, tail, back legs, and back of ears clearly visible. Tail prominently displayed. Rear view, back shot. Professional studio lighting, sharp focus, high quality. This is a single photograph from the back viewing angle only."
+    },
+    {
+      "index": 3,
+      "url": "https://oaidalleapiprodscus.blob.core.windows.net/private/org-uq1cJLQ7236pdzffE284JpZQ/user-DSi32wQFktJPJeXu91X58NLP/img-k7bIubFxErmdUAEdtHNgwPXM.png?st=2025-08-03T22%3A49%3A10Z&se=2025-08-04T00%3A49%3A10Z&sp=r&sv=2024-08-04&sr=b&rscd=inline&rsct=image/png&skoid=475fd488-6c59-44a5-9aa9-31c4db451bea&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2025-08-03T20%3A50%3A45Z&ske=2025-08-04T20%3A50%3A45Z&sks=b&skv=2024-08-04&sig=RmfQ7iHwavd1VDT%2BiENtluvpwJ73eLmFaZGxfGJGb3w%3D",
+      "angle_name": "Right Profile (270\u00b0)",
+      "prompt": "A professional photograph of a Golden Retriever dog standing on a pure white background. The dog has golden fur with cream-colored feathering on the chest and tail. Dark brown eyes, floppy ears, black nose. The dog is turned 90\u00b0 to the right, showing the right profile. Camera positioned at 270\u00b0 azimuth, perpendicular to the dog's right side. Right ear, right eye, right side of face, right shoulder, right leg, and right side of body clearly visible. Head in pure profile view. Right profile shot, side view. Professional studio lighting, sharp focus, high quality. This is a single photograph from the right profile viewing angle only."
+    }
+  ],
+  "description": "Individual dog images generated with DALL-E 3 only, using hardcoded precise prompts"
+}

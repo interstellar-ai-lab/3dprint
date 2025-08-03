@@ -8,7 +8,7 @@ A sophisticated multi-agent system for generating 3D CAD models using AI agents.
 - 🎨 **Image Generation**: Creates multi-view images using DALL-E
 - 📊 **Metadata Generation**: Produces detailed metadata for 3D CAD reconstruction
 - 🔄 **Iterative Improvement**: Continuously refines results based on evaluation feedback
-- 🌐 **Web Interface**: Modern web app for easy interaction
+
 - ⚡ **Multi-API Support**: Test different AI providers (OpenAI, Claude, DeepSeek, Qwen)
 
 ## Architecture
@@ -70,21 +70,7 @@ The system will:
 - Generate and iteratively improve results
 - Save outputs to organized directories
 
-### Web Interface
 
-1. **Start the web server:**
-   ```bash
-   cd webapp
-   python main.py
-   ```
-
-2. **Open your browser:**
-   Navigate to `http://localhost:8000`
-
-3. **Use the web interface:**
-   - Enter your query
-   - Monitor real-time progress
-   - View generated images and reports
 
 ## API Testing
 

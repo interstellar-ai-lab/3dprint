@@ -1,0 +1,39 @@
+{
+  "timestamp": "2025-08-03T02:59:45.493612",
+  "object_type": "dog",
+  "approach": "parallel_api_calls_quick_test",
+  "layout": "2x2 grid multiview",
+  "total_views": 4,
+  "individual_image_size": "1024x1024",
+  "grid_size": "2048x2048",
+  "model": "dall-e-3",
+  "base_prompt": "Capture a professional photograph of a Golden Retriever standing proudly on a pure white background, perfect for a 3D reconstruction project requiring multiview precision. This specific Golden Retriever has a lustrous golden coat with a slightly darker shade along its spine, transitioning to a lighter, creamy hue on its chest and underbelly. The dog's fur is slightly wavy, giving it a soft and fluffy appearance. Its distinctive, expressive eyes are a deep brown, set in a friendly, intelligent face that exudes warmth and approachability. The ears are floppy with a hint of feathering at the tips. Illuminate the scene with well-distributed lighting that highlights the dog's features and ensures sharp focus, emphasizing the texture of the fur and the bright sparkle in its eyes. Ensure the overall composition is well-balanced, showcasing the dog's full profile with impeccable clarity.",
+  "grid_image_path": "generated_images/dog_multiview_quick_20250803_025941/dog_multiview_2x2_grid.png",
+  "individual_images": [
+    {
+      "index": 0,
+      "url": "https://oaidalleapiprodscus.blob.core.windows.net/private/org-uq1cJLQ7236pdzffE284JpZQ/user-DSi32wQFktJPJeXu91X58NLP/img-OKhGhwWjiquJarbgkPqdBwLO.png?st=2025-08-03T08%3A59%3A40Z&se=2025-08-03T10%3A59%3A40Z&sp=r&sv=2024-08-04&sr=b&rscd=inline&rsct=image/png&skoid=475fd488-6c59-44a5-9aa9-31c4db451bea&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2025-08-03T06%3A50%3A12Z&ske=2025-08-04T06%3A50%3A12Z&sks=b&skv=2024-08-04&sig=qcXJp8NWHNIwXrKrrEJgTHB4cHUVE%2BSoR27J1oo1bMQ%3D",
+      "angle": "front view, looking directly at the camera",
+      "prompt": "Capture a professional photograph of a Golden Retriever standing proudly on a pure white background, perfect for a 3D reconstruction project requiring multiview precision. This specific Golden Retriever has a lustrous golden coat with a slightly darker shade along its spine, transitioning to a lighter, creamy hue on its chest and underbelly. The dog's fur is slightly wavy, giving it a soft and fluffy appearance. Its distinctive, expressive eyes are a deep brown, set in a friendly, intelligent face that exudes warmth and approachability. The ears are floppy with a hint of feathering at the tips. Illuminate the scene with well-distributed lighting that highlights the dog's features and ensures sharp focus, emphasizing the texture of the fur and the bright sparkle in its eyes. Ensure the overall composition is well-balanced, showcasing the dog's full profile with impeccable clarity., front view, looking directly at the camera, white background, professional photography"
+    },
+    {
+      "index": 1,
+      "url": "https://oaidalleapiprodscus.blob.core.windows.net/private/org-uq1cJLQ7236pdzffE284JpZQ/user-DSi32wQFktJPJeXu91X58NLP/img-alHOY70KGcLXuW1KMp2YiN5A.png?st=2025-08-03T08%3A59%3A28Z&se=2025-08-03T10%3A59%3A28Z&sp=r&sv=2024-08-04&sr=b&rscd=inline&rsct=image/png&skoid=475fd488-6c59-44a5-9aa9-31c4db451bea&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2025-08-03T09%3A01%3A25Z&ske=2025-08-04T09%3A01%3A25Z&sks=b&skv=2024-08-04&sig=vj4c7n9rgx91E/f4EiQ%2BZn/%2BwDGE%2B28ZwwajFmUmbNM%3D",
+      "angle": "left side view, profile",
+      "prompt": "Capture a professional photograph of a Golden Retriever standing proudly on a pure white background, perfect for a 3D reconstruction project requiring multiview precision. This specific Golden Retriever has a lustrous golden coat with a slightly darker shade along its spine, transitioning to a lighter, creamy hue on its chest and underbelly. The dog's fur is slightly wavy, giving it a soft and fluffy appearance. Its distinctive, expressive eyes are a deep brown, set in a friendly, intelligent face that exudes warmth and approachability. The ears are floppy with a hint of feathering at the tips. Illuminate the scene with well-distributed lighting that highlights the dog's features and ensures sharp focus, emphasizing the texture of the fur and the bright sparkle in its eyes. Ensure the overall composition is well-balanced, showcasing the dog's full profile with impeccable clarity., left side view, profile, white background, professional photography"
+    },
+    {
+      "index": 2,
+      "url": "https://oaidalleapiprodscus.blob.core.windows.net/private/org-uq1cJLQ7236pdzffE284JpZQ/user-DSi32wQFktJPJeXu91X58NLP/img-fgjZCM2fqsQDyRFuxcP89J89.png?st=2025-08-03T08%3A59%3A33Z&se=2025-08-03T10%3A59%3A33Z&sp=r&sv=2024-08-04&sr=b&rscd=inline&rsct=image/png&skoid=475fd488-6c59-44a5-9aa9-31c4db451bea&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2025-08-02T15%3A05%3A58Z&ske=2025-08-03T15%3A05%3A58Z&sks=b&skv=2024-08-04&sig=zQ0wGWVnq0TeI2GvlFn5K0OgBLaGikyN%2Bj1%2B2WHerFU%3D",
+      "angle": "back view, tail visible",
+      "prompt": "Capture a professional photograph of a Golden Retriever standing proudly on a pure white background, perfect for a 3D reconstruction project requiring multiview precision. This specific Golden Retriever has a lustrous golden coat with a slightly darker shade along its spine, transitioning to a lighter, creamy hue on its chest and underbelly. The dog's fur is slightly wavy, giving it a soft and fluffy appearance. Its distinctive, expressive eyes are a deep brown, set in a friendly, intelligent face that exudes warmth and approachability. The ears are floppy with a hint of feathering at the tips. Illuminate the scene with well-distributed lighting that highlights the dog's features and ensures sharp focus, emphasizing the texture of the fur and the bright sparkle in its eyes. Ensure the overall composition is well-balanced, showcasing the dog's full profile with impeccable clarity., back view, tail visible, white background, professional photography"
+    },
+    {
+      "index": 3,
+      "url": "https://oaidalleapiprodscus.blob.core.windows.net/private/org-uq1cJLQ7236pdzffE284JpZQ/user-DSi32wQFktJPJeXu91X58NLP/img-Mko36y5D2u2rusoTwFVzcKeP.png?st=2025-08-03T08%3A59%3A41Z&se=2025-08-03T10%3A59%3A41Z&sp=r&sv=2024-08-04&sr=b&rscd=inline&rsct=image/png&skoid=475fd488-6c59-44a5-9aa9-31c4db451bea&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2025-08-02T10%3A01%3A54Z&ske=2025-08-03T10%3A01%3A54Z&sks=b&skv=2024-08-04&sig=hEwnjgxGZNVgYh1iQkeX0jFozEkxtQ76bk37AAklZfE%3D",
+      "angle": "right side view, profile",
+      "prompt": "Capture a professional photograph of a Golden Retriever standing proudly on a pure white background, perfect for a 3D reconstruction project requiring multiview precision. This specific Golden Retriever has a lustrous golden coat with a slightly darker shade along its spine, transitioning to a lighter, creamy hue on its chest and underbelly. The dog's fur is slightly wavy, giving it a soft and fluffy appearance. Its distinctive, expressive eyes are a deep brown, set in a friendly, intelligent face that exudes warmth and approachability. The ears are floppy with a hint of feathering at the tips. Illuminate the scene with well-distributed lighting that highlights the dog's features and ensures sharp focus, emphasizing the texture of the fur and the bright sparkle in its eyes. Ensure the overall composition is well-balanced, showcasing the dog's full profile with impeccable clarity., right side view, profile, white background, professional photography"
+    }
+  ],
+  "description": "2x2 grid multiview of a dog created by combining 4 individual DALL-E 3 generated images"
+}
