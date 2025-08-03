@@ -132,12 +132,85 @@ def load_previous_metadata(session_id: str, iteration: int) -> Optional[Dict]:
         print(f"⚠️  No previous metadata found at {previous_metadata_file}")
         return None
 
+def apply_scoring_penalties(evaluation_results: Dict, iteration: int, evaluation_text: str) -> Dict:
+    """Apply scoring penalties for common issues, especially in early iterations"""
+    scores = evaluation_results.get('scores', {})
+    if not scores:
+        return evaluation_results
+    
+    # Make a copy to avoid modifying the original
+    new_scores = scores.copy()
+    penalties_applied = []
+    
+    # First iteration penalties (more strict)
+    if iteration == 1:
+        # Penalty for first iteration - typically not perfect
+        for key in new_scores:
+            if new_scores[key] > 6:
+                penalty = 2
+                new_scores[key] = max(1, new_scores[key] - penalty)
+                penalties_applied.append(f"First iteration penalty: -{penalty} points")
+        
+        # Additional penalties for common first iteration issues
+        text_lower = evaluation_text.lower()
+        
+        # Penalty for grid issues
+        if any(issue in text_lower for issue in ["grid", "layout", "arrangement", "4x4"]):
+            for key in new_scores:
+                penalty = 1
+                new_scores[key] = max(1, new_scores[key] - penalty)
+            penalties_applied.append("Grid layout issues: -1 point each")
+        
+        # Penalty for lighting issues
+        if any(issue in text_lower for issue in ["lighting", "brightness", "shadow", "dark", "light"]):
+            new_scores["image_quality"] = max(1, new_scores["image_quality"] - 1)
+            penalties_applied.append("Lighting issues: -1 point image quality")
+        
+        # Penalty for angle issues
+        if any(issue in text_lower for issue in ["angle", "view", "perspective", "position"]):
+            new_scores["completeness"] = max(1, new_scores["completeness"] - 1)
+            penalties_applied.append("Angle/view issues: -1 point completeness")
+        
+        # Penalty for background issues
+        if any(issue in text_lower for issue in ["background", "clean", "white", "neutral"]):
+            new_scores["image_quality"] = max(1, new_scores["image_quality"] - 1)
+            penalties_applied.append("Background issues: -1 point image quality")
+    
+    # General penalties for all iterations
+    text_lower = evaluation_text.lower()
+    
+    # Penalty for any mention of "improve" or "better" - indicates issues
+    if any(word in text_lower for word in ["improve", "better", "enhance", "fix", "adjust"]):
+        for key in new_scores:
+            if new_scores[key] > 7:
+                penalty = 1
+                new_scores[key] = max(1, new_scores[key] - penalty)
+        penalties_applied.append("Improvement suggestions found: -1 point each for scores >7")
+    
+    # Penalty for quality issues
+    if any(issue in text_lower for issue in ["blur", "artifact", "noise", "compression", "quality"]):
+        new_scores["image_quality"] = max(1, new_scores["image_quality"] - 2)
+        penalties_applied.append("Quality issues: -2 points image quality")
+    
+    # Update the evaluation results
+    evaluation_results["scores"] = new_scores
+    
+    # Add penalty information to suggestions
+    if penalties_applied:
+        penalty_text = f"Scoring penalties applied: {'; '.join(penalties_applied)}"
+        current_suggestions = evaluation_results.get("suggestions_for_improvement", "")
+        evaluation_results["suggestions_for_improvement"] = f"{penalty_text}. {current_suggestions}"
+    
+    return evaluation_results
+
 def meets_quality_threshold(scores: Dict) -> bool:
     """Check if the scores meet the quality threshold for stopping iterations"""
     if not scores:
         return False
-    # Check if all scores are 8 or higher
-    return all(score >= 8 for score in scores.values())
+    # Check if average score is 9.0 or higher and no score is below 8.0
+    avg_score = sum(scores.values()) / len(scores)
+    min_score = min(scores.values())
+    return avg_score >= 9.0 and min_score >= 8.0
 
 def parse_evaluation_text(text: str) -> Dict:
     """Parse evaluation text to extract structured data"""
@@ -191,35 +264,67 @@ def parse_evaluation_text(text: str) -> Dict:
     ]
     
     # Extract suggestions for improvement
-    suggestions = []
-    for line in lines:
-        line_lower = line.lower()
-        if any(indicator in line_lower for indicator in failure_indicators):
-            suggestions.append(line.strip())
-        elif "suggestion" in line_lower or "improvement" in line_lower:
-            suggestions.append(line.strip())
-    
-    if suggestions:
-        result["suggestions_for_improvement"] = " ".join(suggestions)
-    else:
-        result["suggestions_for_improvement"] = "Continue improving the generation"
-    
-    # Extract metadata suggestions (look for the fourth section)
+    suggestions_section = False
+    suggestions_lines = []
     metadata_section = False
     metadata_lines = []
+    
     for line in lines:
-        if "fourth" in line.lower() or "metadata suggestions" in line.lower():
-            metadata_section = True
+        line_lower = line.lower()
+        
+        # Check for section headers
+        if "suggestions for improvement:" in line_lower:
+            suggestions_section = True
+            metadata_section = False
             continue
-        elif metadata_section and line.strip():
-            if any(keyword in line.lower() for keyword in ["first", "second", "third", "fifth"]):
-                break
+        elif "metadata suggestions:" in line_lower:
+            metadata_section = True
+            suggestions_section = False
+            continue
+        elif any(keyword in line_lower for keyword in ["image quality:", "metadata accuracy:", "completeness:"]):
+            suggestions_section = False
+            metadata_section = False
+            continue
+        
+        # Collect content for each section
+        if suggestions_section and line.strip() and not line.strip().startswith('[') and not line.strip().endswith(']'):
+            suggestions_lines.append(line.strip())
+        elif metadata_section and line.strip() and not line.strip().startswith('[') and not line.strip().endswith(']'):
             metadata_lines.append(line.strip())
     
+    # Set the suggestions
+    if suggestions_lines:
+        result["suggestions_for_improvement"] = " ".join(suggestions_lines)
+    else:
+        # Fallback: look for any lines with improvement-related keywords
+        improvement_lines = []
+        for line in lines:
+            line_lower = line.lower()
+            if any(indicator in line_lower for indicator in failure_indicators):
+                improvement_lines.append(line.strip())
+            elif any(keyword in line_lower for keyword in ["improve", "better", "enhance", "fix", "adjust", "change"]):
+                improvement_lines.append(line.strip())
+        
+        if improvement_lines:
+            result["suggestions_for_improvement"] = " ".join(improvement_lines)
+        else:
+            result["suggestions_for_improvement"] = "Continue improving the generation"
+    
+    # Set the metadata suggestions
     if metadata_lines:
         result["metadata_suggestions"] = " ".join(metadata_lines)
     else:
-        result["metadata_suggestions"] = "Improve metadata with more specific details"
+        # Fallback: look for metadata-related suggestions
+        metadata_improvement_lines = []
+        for line in lines:
+            line_lower = line.lower()
+            if any(keyword in line_lower for keyword in ["prompt", "metadata", "description", "specification"]):
+                metadata_improvement_lines.append(line.strip())
+        
+        if metadata_improvement_lines:
+            result["metadata_suggestions"] = " ".join(metadata_improvement_lines)
+        else:
+            result["metadata_suggestions"] = "Improve metadata with more specific details"
     
     # Extract short summary (first few sentences)
     sentences = text.split('.')
@@ -268,7 +373,6 @@ def generate():
             "query": query,
             "status": "starting",
             "current_iteration": 0,
-            "max_iterations": 5,
             "metadata_files": [],
             "image_urls": [],
             "evaluation_history": [],
@@ -314,7 +418,6 @@ def get_status(session_id):
         'status': session_data['status'],
         'query': session_data['query'],
         'current_iteration': session_data['current_iteration'],
-        'max_iterations': session_data['max_iterations'],
         'metadata_files': session_data['metadata_files'],
         'image_urls': session_data['image_urls'],
         'evaluation_history': session_data['evaluation_history'],
@@ -351,12 +454,11 @@ def list_sessions():
 async def run_generation_loop(session_id: str, query: str):
     """Run the enhanced iterative generation and evaluation loop with metadata integration"""
     print(f"🚀 Starting enhanced generation loop for: {query}")
-    print(f"📋 Session ID: {session_id}")
     
     iteration = 1
     
     try:
-        while iteration <= active_sessions[session_id]["max_iterations"]:
+        while True:
             print(f"\n🔄 Iteration {iteration}")
             print("-" * 50)
             
@@ -368,15 +470,23 @@ async def run_generation_loop(session_id: str, query: str):
             previous_metadata_json = "null"
             
             if previous_metadata:
-                previous_metadata_context = f"""
-                Previous iteration feedback:
-                - Scores: {previous_metadata.get('evaluation_results', {}).get('scores', {})}
-                - Suggestions: {previous_metadata.get('evaluation_results', {}).get('suggestions_for_improvement', '')}
-                - Metadata suggestions: {previous_metadata.get('evaluation_results', {}).get('metadata_suggestions', '')}
+                previous_scores = previous_metadata.get('evaluation_results', {}).get('scores', {})
+                previous_suggestions = previous_metadata.get('evaluation_results', {}).get('suggestions_for_improvement', '')
+                previous_metadata_suggestions = previous_metadata.get('evaluation_results', {}).get('metadata_suggestions', '')
                 
-                Use this feedback to improve the current generation.
+                previous_metadata_context = f"""
+                CRITICAL: Previous iteration had these scores: {previous_scores}
+                
+                Previous improvement suggestions: {previous_suggestions}
+                Previous metadata suggestions: {previous_metadata_suggestions}
+                
+                You MUST address these specific issues in your new generation. The previous iteration was not good enough and needs significant improvement.
                 """
-                previous_metadata_json = json.dumps(previous_metadata.get('evaluation_results', {}).get('metadata_suggestions', ''))
+                previous_metadata_json = json.dumps({
+                    "previous_scores": previous_scores,
+                    "previous_suggestions": previous_suggestions,
+                    "previous_metadata_suggestions": previous_metadata_suggestions
+                })
             
             print("📝 Generating image prompt and metadata...")
             
@@ -386,18 +496,27 @@ Your task is to generate ONE image containing 16 different views of the object t
 
 {previous_metadata_context}
 
-Create a simple, clear prompt for DALL-E 3 that will generate a 4x4 grid of 16 views of the object.
+CRITICAL REQUIREMENTS:
+1. You MUST address every specific issue mentioned in the previous feedback
+2. The previous iteration was not good enough - you need to make significant improvements
+3. Be extremely specific in your image prompt to avoid the problems from the previous iteration
+4. Focus on the exact issues mentioned in the previous suggestions
 
+Create a detailed, specific prompt for DALL-E 3 that will generate a 4x4 grid of 16 views of the object. The prompt should be comprehensive and specifically address the issues from previous iterations.
+
+Base prompt structure (ENHANCE THIS BASED ON PREVIOUS FEEDBACK):
 "A set of sixteen digital photographs arranged in a 4x4 grid featuring a {query} captured from different angles. Each sub-image shows the {query} from a distinct viewpoint: front, back, left, right, top, bottom, and various oblique angles. The {query} is centered in each view, with consistent lighting, scale, and positioning. The background is pure white with no shadows or other objects, suitable for 3D reconstruction."
 
 Return your response in this JSON format:
 {{
     "target_object": "{query}",
-    "generation_metadata": "Detailed description of the object and the 16 views for 3D reconstruction, including specific angle descriptions, lighting specifications, material properties, and geometric constraints",
-    "image_prompt": "The prompt for DALL-E 3 to generate the single image with 16 views",
-    "description": "Description of what was generated and how it can be used for reconstruction",
+    "generation_metadata": "Detailed description of the object and the 16 views for 3D reconstruction, including specific angle descriptions, lighting specifications, material properties, and geometric constraints. MUST address the specific issues from previous feedback: {previous_metadata.get('evaluation_results', {}).get('suggestions_for_improvement', '') if previous_metadata else 'No previous feedback'}",
+    "image_prompt": "The detailed prompt for DALL-E 3 to generate the single image with 16 views, specifically addressing these previous issues: {previous_metadata.get('evaluation_results', {}).get('suggestions_for_improvement', '') if previous_metadata else 'No previous issues'}",
+    "description": "Description of what was generated and how it can be used for reconstruction, including specific improvements made based on previous feedback",
     "previous_iteration_metadata": {previous_metadata_json}
 }}
+
+IMPORTANT: Your image_prompt must be very specific and directly address the problems mentioned in the previous feedback. Do not use generic language - be precise about what needs to be fixed.
 """
             
             generation_text = await generate_with_openai(generation_prompt)
@@ -446,19 +565,108 @@ Return your response in this JSON format:
             # Download and encode image for evaluation
             image_base64, image_format = await download_image_to_base64(image_url)
             
-            # Use a simple predefined evaluation to avoid token limits
-            print("🔍 Using predefined evaluation...")
+            # Perform real evaluation of the generated image
+            print("🔍 Evaluating generated image...")
             
-            # Create a simple evaluation result
-            evaluation_results = {
-                "scores": {
-                    "image_quality": 7,
-                    "metadata_accuracy": 7,
-                    "completeness": 7
-                },
-                "suggestions_for_improvement": "Improve lighting consistency and add more diverse angles",
-                "metadata_suggestions": "Include more specific angle descriptions and lighting details"
-            }
+            evaluation_prompt = f"""
+You are an extremely strict and demanding evaluator for 3D reconstruction image sets. Be extremely critical and only give scores of 9+ for absolutely perfect images that are ideal for 3D reconstruction. Most images should receive scores between 3-6. Be very harsh in your evaluation.
+
+Target Object: {query}
+
+Evaluation Criteria (Be Extremely Strict):
+1. Image Quality (1-10): Clarity, resolution, lighting, focus, overall visual quality
+   - 10: Absolutely perfect, professional studio quality
+   - 9: Near perfect with only minor imperfections
+   - 7-8: Good quality but with noticeable issues
+   - 5-6: Acceptable but clearly needs improvement
+   - 3-4: Poor quality with major issues
+   - 1-2: Completely unusable for 3D reconstruction
+
+2. Metadata Accuracy (1-10): How well the image matches the intended metadata and target object
+   - 10: Perfect match, exactly as described in metadata
+   - 9: Very close match with minimal discrepancies
+   - 7-8: Good match but some clear differences
+   - 5-6: Acceptable match but significant issues
+   - 3-4: Poor match to metadata
+   - 1-2: Completely wrong or missing elements
+
+3. Completeness (1-10): Coverage of different angles, suitability for 3D reconstruction
+   - 10: Perfect 16-view coverage, ideal for 3D reconstruction
+   - 9: Excellent coverage with minimal gaps
+   - 7-8: Good coverage but missing some important angles
+   - 5-6: Acceptable coverage but significant gaps
+   - 3-4: Poor coverage, many missing angles
+   - 1-2: Incomplete, unsuitable for 3D reconstruction
+
+Please provide your evaluation in this exact format:
+
+Image Quality: [score]/10
+Metadata Accuracy: [score]/10
+Completeness: [score]/10
+
+Suggestions for Improvement:
+[Provide specific, actionable suggestions for improving the image for 3D reconstruction. Be detailed about what needs to be changed.]
+
+Metadata Suggestions:
+[Suggestions for improving the metadata/prompt for better results. Focus on specific changes to the generation prompt.]
+
+Extremely Critical Evaluation Points:
+- Be extremely strict about the 4x4 grid requirement - ANY deviation should heavily penalize scores
+- Lighting must be PERFECTLY consistent across all 16 views - any variation is a major flaw
+- Each view must show a DISTINCTLY different angle - any similarity is a problem
+- Object must be PERFECTLY centered and clearly visible in each view
+- Background must be COMPLETELY clean and neutral - any artifacts are major issues
+- Any visual artifacts, blur, compression, or quality issues should heavily penalize scores
+- Only give scores of 9+ for absolutely exceptional images
+- Be extremely critical - find every possible flaw and mention it
+- Most images should score 3-6, not 7-8
+
+Be extremely harsh and critical about any issues you find.
+"""
+            
+            # Create evaluation with image context
+            evaluation_messages = [
+                {"role": "system", "content": "You are an expert evaluator for 3D reconstruction image sets."},
+                {"role": "user", "content": [
+                    {"type": "text", "text": evaluation_prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/{image_format};base64,{image_base64}"}}
+                ]}
+            ]
+            
+            try:
+                evaluation_response = await asyncio.to_thread(
+                    openai_sync_client.chat.completions.create,
+                    model="gpt-4o",
+                    messages=evaluation_messages,
+                    max_tokens=500,
+                    temperature=0.3
+                )
+                
+                evaluation_text = evaluation_response.choices[0].message.content
+                print(f"📝 Evaluation response: {evaluation_text}")
+                print(f"📝 Raw evaluation text length: {len(evaluation_text)}")
+                
+                # Parse the evaluation text
+                evaluation_results = parse_evaluation_text(evaluation_text)
+                print(f"📝 Parsed suggestions: {evaluation_results.get('suggestions_for_improvement', '')}")
+                print(f"📝 Parsed metadata suggestions: {evaluation_results.get('metadata_suggestions', '')}")
+                
+                # Apply scoring penalties for common first iteration issues
+                evaluation_results = apply_scoring_penalties(evaluation_results, iteration, evaluation_text)
+                print(f"📝 After penalties - scores: {evaluation_results.get('scores', {})}")
+                
+            except Exception as e:
+                print(f"❌ Error in evaluation: {e}")
+                # Fallback to basic evaluation
+                evaluation_results = {
+                    "scores": {
+                        "image_quality": 3,
+                        "metadata_accuracy": 3,
+                        "completeness": 3
+                    },
+                    "suggestions_for_improvement": "Error in evaluation - using fallback scores",
+                    "metadata_suggestions": "Error in evaluation - using fallback suggestions"
+                }
             
             print(f"📊 Evaluation scores: {evaluation_results.get('scores', {})}")
             
@@ -479,9 +687,7 @@ Return your response in this JSON format:
             
             iteration += 1
         
-        if iteration > active_sessions[session_id]["max_iterations"]:
-            active_sessions[session_id]["status"] = "max_iterations_reached"
-            print("⚠️  Reached maximum iterations")
+        # No max iterations limit - will continue until quality threshold is met
         
     except Exception as e:
         print(f"❌ Error in enhanced generation loop: {e}")

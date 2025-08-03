@@ -327,13 +327,80 @@
             border-radius: 6px;
             margin: 20px 0;
         }
+        
+        .ranking-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .ranking-section h3 {
+            margin: 0 0 20px 0;
+            color: #333;
+            font-size: 1.3em;
+        }
+        
+        .score-display {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .overall-score {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            min-width: 200px;
+        }
+        
+        .score-value {
+            display: block;
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .score-label {
+            display: block;
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .suggestions-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .suggestions-section h3 {
+            margin: 0 0 20px 0;
+            color: #333;
+            font-size: 1.3em;
+        }
+        
+        .suggestions-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .suggestions-content p {
+            margin: 0;
+            line-height: 1.6;
+            color: #555;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>Enhanced 3D Generation</h1>
-            <p>Multi-Agent System with Metadata-Based Iterative Evaluation</p>
+            <p>Multi-Agent System to generate 3D models of objects</p>
         </div>
         
         <div class="content">
@@ -384,7 +451,7 @@
                     currentSessionId = result.session_id;
                     document.getElementById('statusSection').style.display = 'block';
                     startStatusPolling();
-                    showSuccess('Generation started successfully! Session ID: ' + currentSessionId);
+                    showSuccess('Generation started successfully!');
                 } else {
                     showError('Failed to start generation: ' + result.detail);
                 }
@@ -446,20 +513,12 @@
             const sessionInfo = document.getElementById('sessionInfo');
             sessionInfo.innerHTML = `
                 <div class="info-card">
-                    <h3>Session ID</h3>
-                    <p>${status.session_id}</p>
-                </div>
-                <div class="info-card">
                     <h3>Status</h3>
                     <p>${status.status}</p>
                 </div>
                 <div class="info-card">
                     <h3>Query</h3>
                     <p>${status.query}</p>
-                </div>
-                <div class="info-card">
-                    <h3>Iteration</h3>
-                    <p>${status.current_iteration} / ${status.max_iterations}</p>
                 </div>
             `;
             
@@ -571,10 +630,7 @@
                                     <h4>Generation Metadata</h4>
                                     <p>${metadata.generation_metadata}</p>
                                 </div>
-                                <div class="metadata-item">
-                                    <h4>Image Prompt</h4>
-                                    <p>${metadata.image_prompt}</p>
-                                </div>
+
                                 <div class="metadata-item">
                                     <h4>Description</h4>
                                     <p>${metadata.description}</p>
@@ -582,28 +638,23 @@
                             </div>
                         </div>
                         
-                        <div class="evaluation-section">
-                            <h3>Evaluation Results</h3>
-                            <div class="scores-grid">
-                                <div class="score-card ${getScoreClass(evaluation.scores.image_quality)}">
-                                    <div class="score-value">${evaluation.scores.image_quality}/10</div>
-                                    <div class="score-label">Image Quality</div>
+                        <div class="ranking-section">
+                            <h3>Quality Score</h3>
+                            <div class="score-display">
+                                <div class="overall-score">
+                                    <span class="score-value">${calculateOverallScore(evaluation.scores)}/10</span>
+                                    <span class="score-label">Overall Quality</span>
                                 </div>
-                                <div class="score-card ${getScoreClass(evaluation.scores.metadata_accuracy)}">
-                                    <div class="score-value">${evaluation.scores.metadata_accuracy}/10</div>
-                                    <div class="score-label">Metadata Accuracy</div>
-                                </div>
-                                <div class="score-card ${getScoreClass(evaluation.scores.completeness)}">
-                                    <div class="score-value">${evaluation.scores.completeness}/10</div>
-                                    <div class="score-label">Completeness</div>
-                                </div>
-                            </div>
-                            
-                            <div class="suggestions">
-                                <h4>Improvement Suggestions</h4>
-                                <p>${evaluation.suggestions_for_improvement}</p>
                             </div>
                         </div>
+                        
+                        <div class="suggestions-section">
+                            <h3>Improvement Suggestions</h3>
+                            <div class="suggestions-content">
+                                <p>${evaluation.suggestions_for_improvement || 'No specific suggestions available.'}</p>
+                            </div>
+                        </div>
+
                     </div>
                 `;
                 
@@ -616,6 +667,13 @@
             if (score >= 8) return 'high';
             if (score >= 6) return 'medium';
             return 'low';
+        }
+        
+        function calculateOverallScore(scores) {
+            if (!scores || Object.keys(scores).length === 0) return 0;
+            const values = Object.values(scores);
+            const average = values.reduce((sum, score) => sum + score, 0) / values.length;
+            return Math.round(average * 10) / 10; // Round to 1 decimal place
         }
         
         function showSuccess(message) {
