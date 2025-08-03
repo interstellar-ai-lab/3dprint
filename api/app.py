@@ -13,9 +13,7 @@ from PIL import Image
 import io
 from openai import OpenAI, AsyncOpenAI
 import tempfile
-
-# Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import aiohttp
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -35,8 +33,63 @@ if not OPENAI_API_KEY:
 openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 openai_sync_client = OpenAI(api_key=OPENAI_API_KEY)
 
-# Import multi-agent functionality
-from multiagent import generation_agent, evaluation_agent, Runner, SQLiteSession, download_image_to_base64
+# Simplified implementations of functions that were imported from multiagent
+async def download_image_to_base64(image_url: str) -> tuple[str, str]:
+    """Download image from URL and convert to base64, return (base64_data, mime_type)"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(image_url) as response:
+                if response.status == 200:
+                    image_data = await response.read()
+                    # Convert to base64
+                    base64_data = base64.b64encode(image_data).decode('utf-8')
+                    
+                    # Detect image format from URL or content
+                    mime_type = "image/jpeg"  # default
+                    if image_url.lower().endswith('.png'):
+                        mime_type = "image/png"
+                    elif image_url.lower().endswith('.gif'):
+                        mime_type = "image/gif"
+                    elif image_url.lower().endswith('.webp'):
+                        mime_type = "image/webp"
+                    else:
+                        # Try to detect from content using PIL
+                        try:
+                            img = Image.open(io.BytesIO(image_data))
+                            if img.format == 'PNG':
+                                mime_type = "image/png"
+                            elif img.format == 'GIF':
+                                mime_type = "image/gif"
+                            elif img.format == 'WEBP':
+                                mime_type = "image/webp"
+                        except:
+                            # If detection fails, assume PNG (common for DALL-E)
+                            mime_type = "image/png"
+                    
+                    return base64_data, mime_type
+                else:
+                    print(f"Failed to download image from {image_url}: {response.status}")
+                    return "", ""
+    except Exception as e:
+        print(f"Error downloading image from {image_url}: {e}")
+        return "", ""
+
+async def generate_with_openai(prompt: str) -> str:
+    """Generate text using OpenAI GPT-4"""
+    try:
+        response = await openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that generates image prompts and metadata for 3D reconstruction."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=1000,
+            temperature=0.7
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"Error generating with OpenAI: {e}")
+        return ""
 
 # Metadata functions for iterative evaluation
 def save_metadata(session_id: str, iteration: int, metadata: Dict, image_url: str, evaluation_results: Dict) -> str:
@@ -301,7 +354,6 @@ async def run_generation_loop(session_id: str, query: str):
     print(f"📋 Session ID: {session_id}")
     
     iteration = 1
-    db_session = SQLiteSession(session_id)
     
     try:
         while iteration <= active_sessions[session_id]["max_iterations"]:
@@ -348,8 +400,7 @@ Return your response in this JSON format:
 }}
 """
             
-            result = await Runner.run(generation_agent, generation_prompt, session=db_session)
-            generation_text = result.final_output
+            generation_text = await generate_with_openai(generation_prompt)
             
             # Parse the generation result - handle both raw JSON and markdown-wrapped JSON
             try:
