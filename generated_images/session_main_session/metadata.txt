@@ -1,0 +1,7 @@
+Session ID: main_session
+Downloaded: 1 images
+Timestamp: /Users/Interstellar/Documents/3dprint/openai-agents-python
+
+Image 1: https://oaidalleapiprodscus.blob.core.windows.net/private/org-uq1cJLQ7236pdzffE284JpZQ/user-DSi32wQFktJPJeXu91X58NLP/img-qseu4wza3bXJifZ0Rva8rWvH.png?st=2025-08-02T05%3A51%3A32Z&se=2025-08-02T07%3A51%3A32Z&sp=r&sv=2024-08-04&sr=b&rscd=inline&rsct=image/png&skoid=52f8f7b3-ca8d-4b21-9807-8b9df114d84c&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2025-08-01T07%3A09%3A55Z&ske=2025-08-02T07%3A09%3A55Z&sks=b&skv=2024-08-04&sig=i4MHCtsCsAIkAeN5g8ClTUF0eDvoWoX76qGArfGp5xc%3D
+Saved as: generated_images/session_main_session/image_01.png
+

@@ -1,0 +1,17 @@
+{
+  "session_id": "test-session-123",
+  "iteration": 1,
+  "target_object": "car",
+  "generation_metadata": "A red sports car with 16 different views arranged in a 4x4 grid. Each view shows the car from a distinct angle including front, back, left, right, top, bottom, and various oblique angles. The car maintains consistent lighting, scale, and positioning across all views. Background is pure white suitable for 3D reconstruction.",
+  "image_prompt": "A set of sixteen digital photographs arranged in a 4x4 grid featuring a red sports car captured from different angles. Each sub-image shows the car from a distinct viewpoint: front, back, left, right, top, bottom, and various oblique angles. The car is centered in each view, with consistent lighting, scale, and positioning. The background is pure white with no shadows or other objects, suitable for 3D reconstruction.",
+  "description": "Generated a 4x4 grid of car views for 3D reconstruction",
+  "evaluation_results": {
+    "scores": {
+      "image_quality": 7,
+      "metadata_accuracy": 6,
+      "completeness": 8
+    },
+    "suggestions_for_improvement": "Improve metadata accuracy with more specific angle descriptions",
+    "metadata_suggestions": "Add specific angle measurements and lighting specifications for each view"
+  }
+}

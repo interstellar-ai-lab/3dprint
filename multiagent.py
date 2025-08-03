@@ -1,134 +1,76 @@
-from agents import Agent, Runner, SQLiteSession, OpenAIChatCompletionsModel, function_tool
+from agents import Agent, Runner, SQLiteSession, OpenAIChatCompletionsModel
 import asyncio
 from pydantic import BaseModel
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, OpenAI
 from agents import set_tracing_disabled
 import base64
-from openai import OpenAI
 import json
 import pathlib
-from PIL import Image
-import io
-import requests
 import aiohttp
 import html
-
 import os
+import uuid
+from datetime import datetime
+from typing import Optional, Dict
+
+# Load environment variables from .env file (for local development)
+from dotenv import load_dotenv
+load_dotenv()
 
 # API Keys for different providers
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY", "")
-# Add your DeepSeek and Qwen API keys here when you have them
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
-QWEN_API_KEY = os.getenv("QWEN_API_KEY", "")
 
-# OpenAI client for image generation (still needed for DALL-E)
-client = OpenAI(api_key=OPENAI_API_KEY)
-
-# Different API clients for text generation
+# OpenAI clients
 openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
-
-claude_client = AsyncOpenAI(
-    api_key=CLAUDE_API_KEY,
-    base_url="https://api.anthropic.com/v1"
-)
-
-# DeepSeek client (uncomment when you have the API key)
-# deepseek_client = AsyncOpenAI(
-#     api_key=DEEPSEEK_API_KEY,
-#     base_url="https://api.deepseek.com/v1"
-# )
-
-# Qwen client (uncomment when you have the API key)
-# qwen_client = AsyncOpenAI(
-#     api_key=QWEN_API_KEY,
-#     base_url="https://dashscope.aliyuncs.com/api/v1"
-# )
+openai_sync_client = OpenAI(api_key=OPENAI_API_KEY)
 
 set_tracing_disabled(disabled=True)
 
-# Configuration for different models - easy to switch for testing
-MODEL_CONFIGS = {
-    "openai": {
-        "client": openai_client,
-        "model": "gpt-4o",
-        "name": "OpenAI GPT-4o"
-    },
-    "claude": {
-        "client": claude_client,
-        "model": "claude-sonnet-4-20250514",
-        "name": "Claude Sonnet 4"
-    },
-    # "deepseek": {
-    #     "client": deepseek_client,
-    #     "model": "deepseek-chat",
-    #     "name": "DeepSeek Chat"
-    # },
-    # "qwen": {
-    #     "client": qwen_client,
-    #     "model": "qwen-turbo",
-    #     "name": "Qwen Turbo"
-    # }
-}
-
-# Current model to use for testing - change this to test different APIs
-CURRENT_MODEL = "claude"  # Options: "openai", "claude", "deepseek", "qwen"
-
 ### agent 1: generation_agent
 model_1 = OpenAIChatCompletionsModel(
-    model="claude-sonnet-4-20250514",
-    openai_client=claude_client
+    model="gpt-4o",
+    openai_client=openai_client
 )
-PROMPT = """
-    Your task is to generate 16 views of the same object that can be used for 3D CAD reconstruction for the target object: {query}. 
-    
-    CRITICAL REQUIREMENTS:
-    1. NO BACKGROUND: Generate images with transparent or pure white backgrounds. The object should be the only visible element.
-    2. CONSISTENT SIZE: The object must appear the same size across all 16 views. Ensure the object occupies approximately the same percentage of the image frame in each view.
-    3. DIVERSE ANGLES: Cover different angles and perspectives of the object for complete 3D reconstruction.
-    4. CLEAN COMPOSITION: Position the object centrally in each image with adequate spacing from edges.
-    
-    STEP-BY-STEP PROCESS:
-    1. First, create detailed prompts for 16 different views of the object
-    2. For each view, call the generate_image tool with a detailed prompt
-    3. Collect all the image URLs returned by the generate_image tool
-    4. Create metadata describing the object and views
-    5. Return everything in JSON format
-    
-    EXAMPLE PROMPTS FOR DIFFERENT VIEWS:
-    - "A {query} viewed from the front, centered on white background, professional lighting, high detail, no shadows"
-    - "A {query} viewed from the back, centered on white background, professional lighting, high detail, no shadows"
-    - "A {query} viewed from the left side, centered on white background, professional lighting, high detail, no shadows"
-    - "A {query} viewed from the right side, centered on white background, professional lighting, high detail, no shadows"
-    - "A {query} viewed from above (top view), centered on white background, professional lighting, high detail, no shadows"
-    - "A {query} viewed from below (bottom view), centered on white background, professional lighting, high detail, no shadows"
-    - And 10 more views from different angles (45-degree angles, 3/4 views, etc.)
-    
-    IMPORTANT: You MUST call the generate_image tool 16 times to create actual images. Do not just describe the images - generate them!
-    
-    Return your response in this exact JSON format:
-    {{
-        "metadata": "Detailed description of the object and the 16 views generated",
-        "image_urls": ["url1", "url2", "url3", ...], // The 16 URLs returned by generate_image tool calls
-        "description": "Summary of what was generated and how it can be used for CAD reconstruction"
-    }}
-    """
+GENERATION_PROMPT = """
+Your task is to generate ONE image containing 16 different views of the object that can be used for 3D reconstruction for the target object: {query}. 
 
-# Custom function tool for image generation
-@function_tool
-def generate_image(prompt: str, quality: str = "low") -> str:
-    """Generate an image using DALL-E based on the prompt"""
+{previous_metadata_context}
+
+Create a simple, clear prompt for DALL-E 3 that will generate a 4x4 grid of 16 views of the object.
+
+"A set of sixteen digital photographs arranged in a 4x4 grid featuring a {query} captured from different angles. Each sub-image shows the {query} from a distinct viewpoint: front, back, left, right, top, bottom, and various oblique angles. The {query} is centered in each view, with consistent lighting, scale, and positioning. The background is pure white with no shadows or other objects, suitable for 3D reconstruction."
+
+Return your response in this JSON format:
+{{
+    "target_object": "{query}",
+    "generation_metadata": "Detailed description of the object and the 16 views for 3D reconstruction, including specific angle descriptions, lighting specifications, material properties, and geometric constraints",
+    "image_prompt": "The prompt for DALL-E 3 to generate the single image with 16 views",
+    "description": "Description of what was generated and how it can be used for reconstruction",
+    "previous_iteration_metadata": {previous_metadata_json}
+}}
+"""
+
+# DALL-E 3 image generation function
+async def generate_image_with_dalle3(prompt: str) -> str:
+    """Generate image using DALL-E 3 directly"""
     try:
-        img_resp = client.images.generate(
+        print(f"🎨 Generating image with DALL-E 3: {prompt[:50]}...")
+        
+        response = await asyncio.to_thread(
+            openai_sync_client.images.generate,
             model="dall-e-3",
             prompt=prompt,
             size="1024x1024",
-            quality="hd" if quality == "high" else "standard"
+            quality="standard"
         )
-        # Return the image URL for now
-        return img_resp.data[0].url
+        
+        image_url = response.data[0].url
+        print(f"✅ DALL-E 3 image generated: {image_url[:50]}...")
+        return image_url
+        
     except Exception as e:
-        return f"Error generating image: {str(e)}"
+        print(f"❌ Error generating image with DALL-E 3: {e}")
+        return ""
 
 def extract_image_urls_from_text(text: str) -> list[str]:
     """Extract image URLs from text response"""
@@ -588,68 +530,89 @@ async def download_images_locally(image_urls: list[str], session_id: str = None)
     
     return local_paths
 
-async def generate_images_from_prompts(image_prompts: list[str]) -> tuple[list[str], list[str]]:
-    """Generate images from prompts using DALL-E
-    
-    Returns:
-        tuple: (image_urls, empty_list) - kept for compatibility
-    """
-    import pathlib
-    import uuid
-    import aiohttp
-    
-    image_urls = []
-    
-    for i, prompt in enumerate(image_prompts):
-        try:
-            print(f"🎨 Generating image {i+1}/{len(image_prompts)}: {prompt[:50]}...")
-            
-            # Generate image using DALL-E
-            img_resp = client.images.generate(
-                model="dall-e-3",
-                prompt=prompt,
-                size="1024x1024",
-                quality="standard"
-            )
-            
-            image_url = img_resp.data[0].url
-            image_urls.append(image_url)
-            print(f"✅ Generated image {i+1}: {image_url[:50]}...")
-                        
-        except Exception as e:
-            print(f"❌ Error generating image {i+1}: {str(e)}")
-            # Add empty string to maintain list length
-            image_urls.append("")
-    
-    print(f"🎯 Generated {len([u for u in image_urls if u])} images successfully")
-    
-    return image_urls, []  # Return empty list for compatibility
+# No longer needed - GPT-4o generates images directly
 
-def parse_evaluation_text(text: str) -> dict:
+def parse_evaluation_text(text: str) -> Dict:
     """Parse evaluation text to extract structured data"""
     result = {
         "short_summary": "",
         "markdown_report": text,
-        "suggestions_for_improvement": ""
+        "suggestions_for_improvement": "",
+        "metadata_suggestions": "",
+        "scores": {"image_quality": 0, "metadata_accuracy": 0, "completeness": 0}
     }
     
     # Look for "well done" in the text
     if "well done" in text.lower():
         result["suggestions_for_improvement"] = "well done"
+        result["metadata_suggestions"] = "current metadata is sufficient"
+    
+    # Extract scores from the text - look for multiple patterns
+    lines = text.split('\n')
+    for line in lines:
+        line_lower = line.lower()
+        if "image quality" in line_lower:
+            # Look for score patterns like "Image Quality: 8/10" or "Image Quality: 8" or "Score: 8"
+            import re
+            score_match = re.search(r'(\d+)/10|(\d+)(?=\s*$)|score:\s*(\d+)', line)
+            if score_match:
+                score = int(score_match.group(1) or score_match.group(2) or score_match.group(3))
+                result["scores"]["image_quality"] = score
+                print(f"🔍 Found Image Quality score: {score}")
+        elif "metadata accuracy" in line_lower:
+            score_match = re.search(r'(\d+)/10|(\d+)(?=\s*$)|score:\s*(\d+)', line)
+            if score_match:
+                score = int(score_match.group(1) or score_match.group(2) or score_match.group(3))
+                result["scores"]["metadata_accuracy"] = score
+                print(f"🔍 Found Metadata Accuracy score: {score}")
+        elif "completeness" in line_lower:
+            score_match = re.search(r'(\d+)/10|(\d+)(?=\s*$)|score:\s*(\d+)', line)
+            if score_match:
+                score = int(score_match.group(1) or score_match.group(2) or score_match.group(3))
+                result["scores"]["completeness"] = score
+                print(f"🔍 Found Completeness score: {score}")
+    
+    # Check for failure indicators in the text
+    failure_indicators = [
+        "5x5", "25 views", "25 squares", "wrong grid", "not 4x4",
+        "multiple objects", "stacked", "overlapping", "three cars", "two cars",
+        "grid pattern", "text labels", "numbers", "gray background",
+        "wireframe", "low-poly", "3d model style", "toy-like",
+        "watermark", "visual stu", "grid lines", "black lines",
+        "different object types", "mix of", "cars and motorcycles",
+        "circular objects", "multiple motorcycles",
+    ]
+    
+    # Extract suggestions for improvement
+    suggestions = []
+    for line in lines:
+        line_lower = line.lower()
+        if any(indicator in line_lower for indicator in failure_indicators):
+            suggestions.append(line.strip())
+        elif "suggestion" in line_lower or "improvement" in line_lower:
+            suggestions.append(line.strip())
+    
+    if suggestions:
+        result["suggestions_for_improvement"] = " ".join(suggestions)
     else:
-        # Try to extract suggestions from the text
-        lines = text.split('\n')
-        for i, line in enumerate(lines):
-            if "suggestion" in line.lower() or "improvement" in line.lower():
-                suggestions = []
-                for j in range(i, min(i + 5, len(lines))):
-                    if lines[j].strip():
-                        suggestions.append(lines[j].strip())
-                result["suggestions_for_improvement"] = " ".join(suggestions)
+        result["suggestions_for_improvement"] = "Continue improving the generation"
+    
+    # Extract metadata suggestions (look for the fourth section)
+    metadata_section = False
+    metadata_lines = []
+    for line in lines:
+        if "fourth" in line.lower() or "metadata suggestions" in line.lower():
+            metadata_section = True
+            continue
+        elif metadata_section and line.strip():
+            if any(keyword in line.lower() for keyword in ["first", "second", "third", "fifth"]):
                 break
-        
-        if not result["suggestions_for_improvement"]:
-            result["suggestions_for_improvement"] = "Continue improving the generation"
+            metadata_lines.append(line.strip())
+    
+    if metadata_lines:
+        result["metadata_suggestions"] = " ".join(metadata_lines)
+    else:
+        result["metadata_suggestions"] = "Improve metadata with more specific details"
     
     # Extract short summary (first few sentences)
     sentences = text.split('.')
@@ -657,6 +620,54 @@ def parse_evaluation_text(text: str) -> dict:
         result["short_summary"] = sentences[0].strip() + "."
     
     return result
+
+# Metadata functions for iterative evaluation
+def save_metadata(session_id: str, iteration: int, metadata: Dict, image_url: str, evaluation_results: Dict) -> str:
+    """Save comprehensive metadata for each iteration"""
+    session_dir = Path(f"generated_images/session_{session_id}")
+    session_dir.mkdir(parents=True, exist_ok=True)
+    metadata_file = session_dir / f"metadata_iteration_{iteration:02d}.json"
+    metadata_data = {
+        "session_id": session_id,
+        "iteration": iteration,
+        "timestamp": datetime.now().isoformat(),
+        "target_object": metadata.get("target_object", ""),
+        "generation_metadata": metadata.get("generation_metadata", ""),
+        "image_prompt": metadata.get("image_prompt", ""),
+        "description": metadata.get("description", ""),
+        "image_url": image_url,
+        "evaluation_results": evaluation_results,
+        "previous_iteration_metadata": metadata.get("previous_iteration_metadata", None)
+    }
+    with open(metadata_file, 'w') as f:
+        json.dump(metadata_data, f, indent=2)
+    print(f"✅ Saved metadata to {metadata_file}")
+    return str(metadata_file)
+
+def load_previous_metadata(session_id: str, iteration: int) -> Optional[Dict]:
+    """Load metadata from the previous iteration"""
+    if iteration <= 1:
+        return None
+    previous_metadata_file = Path(f"generated_images/session_{session_id}/metadata_iteration_{iteration-1:02d}.json")
+    if previous_metadata_file.exists():
+        try:
+            with open(previous_metadata_file, 'r') as f:
+                metadata = json.load(f)
+            print(f"✅ Loaded previous metadata from {previous_metadata_file}")
+            return metadata
+        except Exception as e:
+            print(f"❌ Failed to load previous metadata: {e}")
+            return None
+    else:
+        print(f"⚠️  No previous metadata found at {previous_metadata_file}")
+        return None
+
+def meets_quality_threshold(scores: Dict) -> bool:
+    """Check if the scores meet the quality threshold for stopping iterations"""
+    if not scores:
+        return False
+    # Check if all scores are 8 or higher
+    return all(score >= 8 for score in scores.values())
 
 # Output schema for generation agent
 class GenerationOutput(BaseModel):
@@ -669,40 +680,79 @@ class GenerationOutput(BaseModel):
     description: str
     """Description of what was generated and how it can be used for CAD reconstruction."""
 
-# Generation agent - only uses generate_image tool since mesh generation is done separately
+# Generation agent - uses GPT-4o's built-in image generation capabilities
 generation_agent = Agent(
-    name="Writeragent",
-    instructions=PROMPT,
-    model=model_1,
-    tools=[generate_image]
+    name="GenerationAgent",
+    instructions=GENERATION_PROMPT,
+    model=model_1
 )
 
 
 ### agent 2: evaluation_agent
-# Agent used to synthesize a final report from the individual summaries.dog
-current_config = MODEL_CONFIGS[CURRENT_MODEL]
-print(f"Using {current_config['name']} for evaluation agent")
-
+# Agent used to synthesize a final report from the individual summaries
 model_2 = OpenAIChatCompletionsModel(
-    model=current_config["model"],
-    openai_client=current_config["client"]
+    model="gpt-4o",
+    openai_client=openai_client
 )
-PROMPT = """
-    You are an evaluation agent. 
-    You need to evaluate the generated 2D images and metadata, and write a report about the evaluation.
-    Answer the follow-up questions to provide hints for the next round of generation. 
-    First, summarize the generated 2D images and metadata in a short 2-3 sentence summary.
+EVALUATION_PROMPT = """
+You are a STRICT evaluation agent for 3D reconstruction images. 
+You must be extremely critical and only give high scores if ALL requirements are perfectly met.
 
-    Second, you need to write a report evaluating whether these 2D images and metadata are correct/sufficient for the CAD generation task, using the following three criteria and assign a score (1-10) for each:
-    1. Image Quality: Assess the visual clarity and alignment of the generated 2D images.
-    2. Metadata Accuracy: Evaluate the correctness and relevance of the metadata for CAD reconstruction.
-    3. Completeness: Determine if the number of views and metadata provided are sufficient for the task.  
-    Include these scores in your report and provide detailed reasoning (be as specific as possible) for each score.    
-     
-    Third, provide suggestions for improvement. If all scores are higher than 6.5, your suggestions_for_improvement should be "well done", nothing more.
-    The report should be in markdown format, and it should be detailed and comprehensive.
+CRITICAL REQUIREMENTS FOR 3D RECONSTRUCTION:
+1. **4x4 Grid Layout**: The image MUST contain exactly 16 squares arranged in a 4x4 grid (4 rows × 4 columns)
+2. **One Object Per Square**: Each square MUST contain exactly ONE instance of the object - NO EXCEPTIONS
+3. **Same Object Type**: ALL 16 squares must show the SAME object type
+4. **Same Pose**: The object MUST be in the SAME pose/position across all 16 views
+5. **16 Distinct Angles**: Each square MUST show a DIFFERENT angle/view of the object
+6. **Consistent Size**: The object MUST appear the same size in all 16 squares
+7. **PURE WHITE BACKGROUND**: ABSOLUTELY NO grid lines, NO text, NO numbers, NO watermarks, NO coordinate systems, NO axis labels, NO overlays - ONLY PURE WHITE BACKGROUND
+8. **Realistic Style**: Photorealistic or realistic rendering, NOT wireframe/low-poly/3D model style
+9. **Lighting Consistency**: All views must have IDENTICAL lighting conditions
+10. **Surface Detail Preservation**: All surface details, textures, and features must be clearly visible and consistent
+11. **Edge Definition**: Sharp, well-defined edges and contours for accurate geometry extraction
+12. **Depth Information**: Sufficient depth cues through shadows, perspective, and overlapping
+13. **No Occlusion**: No parts of the object should be hidden or occluded in any view
+14. **Scale Reference**: Object should occupy 60-80% of each square for optimal detail capture
+15. **IDENTICAL COLOR/MATERIAL**: EXACTLY the same color, material, and appearance across ALL 16 views - NO color variations
+16. **Geometric Accuracy**: No distortion, stretching, or warping of the object shape
 
-    """
+SCORING CRITERIA (BE VERY STRICT):
+- **Score 1-3**: Major failures (wrong grid size, multiple objects, wrong background, wrong style)
+- **Score 4-6**: Some requirements met but significant issues remain
+- **Score 7-8**: Most requirements met with minor issues
+- **Score 9-10**: ALL requirements perfectly met
+
+First, analyze the provided metadata and summarize the generation intent and specifications.
+
+Second, evaluate using these three criteria and assign a score (1-10) for each:
+1. Image Quality: Assess visual clarity, proper 4x4 grid layout, one object per square, same object type, same pose across all views, realistic rendering style, clean white background, lighting consistency, surface detail preservation, edge definition, depth information, no occlusion, proper scale (60-80%), color consistency, and geometric accuracy.
+2. Metadata Accuracy: Evaluate the correctness and relevance of the metadata for reconstruction, including proper angle descriptions, lighting specifications, material properties, and geometric constraints. Check if the metadata accurately describes what was generated.
+3. Completeness: Determine if the 16 distinct angles provide sufficient coverage for 3D reconstruction with 360° horizontal rotation, full vertical elevation (-90° to +90°), key views (front, back, left, right, top, bottom), and 10 intermediate angles for smooth reconstruction.
+
+You MUST include the exact scores in this format:
+- Image Quality: X/10
+- Metadata Accuracy: X/10  
+- Completeness: X/10
+
+Third, provide specific, actionable suggestions for improvement. Be very specific about what needs to be fixed. For example:
+- "Wrong grid size: Image shows 25 squares instead of 16. Need exactly 4x4 grid."
+- "Multiple objects detected: Square 3 contains 2 objects. Need exactly ONE object per square."
+- "Background issues: Gray background with grid lines. Need pure white background with NO lines or text."
+- "Style issues: Wireframe rendering detected. Need photorealistic style."
+- "Lighting inconsistency: Different shadows across views. Need identical lighting conditions."
+- "Color inconsistency: Object appears blue in some views, red in others. Need identical color across all views."
+- "Metadata mismatch: Metadata describes 16 views but image shows different layout."
+- "Incomplete coverage: Missing top/bottom views needed for full 3D reconstruction."
+
+Fourth, provide updated metadata suggestions for the next iteration. This should include:
+- Specific angle measurements and descriptions
+- Lighting specifications (type, intensity, direction)
+- Material properties (color, texture, reflectivity)
+- Geometric constraints and measurements
+- Any additional details needed for better reconstruction
+
+The metadata suggestions should build upon the previous iteration's feedback and provide more precise specifications for the next generation attempt.
+"""
 
 
 class ReportData_2(BaseModel):
@@ -715,9 +765,15 @@ class ReportData_2(BaseModel):
     suggestions_for_improvement: str
     """Suggestions to improve the generated 2D images and metadata."""
 
+evaluation_agent = Agent(
+    name="EvaluationAgent",
+    instructions=EVALUATION_PROMPT,
+    model=model_2
+)
+
 writer_agent = Agent(
     name="Writeragent",
-    instructions=PROMPT,
+    instructions=EVALUATION_PROMPT,
     model=model_2
     # Removed output_type=ReportData_2 to avoid JSON parsing issues
 )
@@ -822,70 +878,243 @@ f 5//6 1//6 4//6 8//6"""
 # Create a session instance
 session = SQLiteSession("conversation_123")
 
-# Function to switch models for testing
-def switch_model(model_name):
-    """Switch to a different model for testing"""
-    global CURRENT_MODEL, model_2, writer_agent
-    if model_name in MODEL_CONFIGS:
-        CURRENT_MODEL = model_name
-        current_config = MODEL_CONFIGS[model_name]
-        print(f"Switching to {current_config['name']}")
+async def run_enhanced_generation_loop(query: str, session_id: str = None) -> Dict:
+    """Run the enhanced iterative generation and evaluation loop with metadata integration"""
+    if session_id is None:
+        session_id = str(uuid.uuid4())
+    
+    print(f"🚀 Starting enhanced generation loop for: {query}")
+    print(f"📋 Session ID: {session_id}")
+    
+    # Initialize session data
+    session_data = {
+        "session_id": session_id,
+        "query": query,
+        "status": "running",
+        "current_iteration": 0,
+        "max_iterations": 5,
+        "metadata_files": [],
+        "image_urls": [],
+        "mesh_paths": [],
+        "evaluation_history": []
+    }
+    
+    iteration = 1
+    db_session = SQLiteSession(session_id)
+    
+    try:
+        while iteration <= session_data["max_iterations"]:
+            print(f"\n🔄 Iteration {iteration}")
+            print("-" * 50)
+            
+            # Load previous metadata for iterative feedback
+            previous_metadata = load_previous_metadata(session_id, iteration)
+            
+            # Prepare context for generation
+            previous_metadata_context = ""
+            previous_metadata_json = "null"
+            
+            if previous_metadata:
+                previous_metadata_context = f"""
+                Previous iteration feedback:
+                - Scores: {previous_metadata.get('evaluation_results', {}).get('scores', {})}
+                - Suggestions: {previous_metadata.get('evaluation_results', {}).get('suggestions_for_improvement', '')}
+                - Metadata suggestions: {previous_metadata.get('evaluation_results', {}).get('metadata_suggestions', '')}
+                
+                Use this feedback to improve the current generation.
+                """
+                previous_metadata_json = json.dumps(previous_metadata.get('evaluation_results', {}).get('metadata_suggestions', ''))
+            
+            print("📝 Generating image prompt and metadata...")
+            
+            # Generate new metadata and image prompt
+            prompt = GENERATION_PROMPT.format(
+                query=query,
+                previous_metadata_context=previous_metadata_context,
+                previous_metadata_json=previous_metadata_json
+            )
+            
+            result = await Runner.run(generation_agent, prompt, session=db_session)
+            generation_text = result.final_output
+            
+            # Parse the generation result
+            try:
+                generation_data = json.loads(generation_text)
+                metadata = generation_data
+            except json.JSONDecodeError:
+                print(f"❌ Failed to parse generation result as JSON: {generation_text}")
+                metadata = {
+                    "target_object": query,
+                    "generation_metadata": generation_text,
+                    "image_prompt": f"A 4x4 grid of {query} from different angles",
+                    "description": "Generated from text response",
+                    "previous_iteration_metadata": previous_metadata_json
+                }
+            
+            # Generate image using DALL-E 3
+            image_url = await generate_image_with_dalle3(metadata["image_prompt"])
+            if not image_url:
+                print("❌ Failed to generate image")
+                break
+            
+            print(f"🎨 Generated image: {image_url}")
+            
+            # Download and encode image for evaluation
+            image_base64, image_format = await download_image_to_base64(image_url)
+            
+            # Prepare evaluation content
+            evaluation_contents = f"""
+            Please evaluate the following image and metadata for 3D reconstruction:
+            
+            TARGET OBJECT: {query}
+            
+            METADATA:
+            {json.dumps(metadata, indent=2)}
+            
+            IMAGE:
+            <image>{image_base64}</image>
+            
+            Please provide a comprehensive evaluation following the strict criteria.
+            """
+            
+            print("🔍 Evaluating generated image and metadata...")
+            
+            # Run evaluation
+            evaluation_result = await Runner.run(evaluation_agent, evaluation_contents, session=db_session)
+            evaluation_text = evaluation_result.final_output
+            
+            # Parse evaluation results
+            evaluation_results = parse_evaluation_text(evaluation_text)
+            
+            print(f"📊 Evaluation scores: {evaluation_results.get('scores', {})}")
+            
+            # Save metadata for this iteration
+            metadata_file = save_metadata(session_id, iteration, metadata, image_url, evaluation_results)
+            
+            # Update session data
+            session_data["current_iteration"] = iteration
+            session_data["metadata_files"].append(metadata_file)
+            session_data["image_urls"].append(image_url)
+            session_data["evaluation_history"].append(evaluation_results)
+            
+            # Generate 3D mesh
+            mesh_path = await generate_3d_mesh_with_llm(metadata["generation_metadata"], [image_url])
+            session_data["mesh_paths"].append(mesh_path)
+            
+            # Check if quality threshold is met
+            if meets_quality_threshold(evaluation_results.get("scores", {})):
+                print("✅ Quality threshold met! Stopping iterations.")
+                session_data["status"] = "completed"
+                break
+            
+            iteration += 1
         
-        model_2 = OpenAIChatCompletionsModel(
-            model=current_config["model"],
-            openai_client=current_config["client"]
-        )
+        if iteration > session_data["max_iterations"]:
+            session_data["status"] = "max_iterations_reached"
+            print("⚠️  Reached maximum iterations")
         
-        writer_agent = Agent(
-            name="Writeragent",
-            instructions=PROMPT,
-            model=model_2
-            # Removed output_type=ReportData_2 to avoid JSON parsing issues
+        return session_data
+        
+    except Exception as e:
+        print(f"❌ Error in enhanced generation loop: {e}")
+        session_data["status"] = "error"
+        session_data["error"] = str(e)
+        return session_data
+
+async def test_simple_generation():
+    """Test simple image generation without the complex prompt"""
+    print("🧪 Testing simple image generation...")
+    
+    simple_prompt = "Generate a simple image of a dog"
+    
+    try:
+        result = await asyncio.wait_for(
+            Runner.run(generation_agent, simple_prompt, session=session),
+            timeout=300  # 5 minutes timeout
         )
+        print(f"✅ Simple generation completed!")
+        print(f"📄 Response: {result.final_output[:200]}...")
         return True
-    else:
-        print(f"Model {model_name} not found. Available models: {list(MODEL_CONFIGS.keys())}")
+    except asyncio.TimeoutError:
+        print(f"❌ Simple generation timed out after 5 minutes")
+        return False
+    except Exception as e:
+        print(f"❌ Simple generation failed: {e}")
         return False
 
 async def main():
+    # Test the enhanced generation loop with metadata integration
+    print("🚀 Testing enhanced generation loop with metadata integration...")
+    query = "a modern sports car"
+    result = await run_enhanced_generation_loop(query)
+    print(f"✅ Enhanced generation completed with status: {result['status']}")
+    print(f"📊 Final iteration: {result['current_iteration']}")
+    print(f"🎨 Generated {len(result['image_urls'])} images")
+    print(f"📁 Saved {len(result['metadata_files'])} metadata files")
+    
+    # First test simple generation
+    if not await test_simple_generation():
+        print("❌ Simple generation failed, stopping...")
+        return
+    
     query = input("What would you like to generate? ")
     print(query)
-    
-    # Ask which model to use for testing
-    print(f"\nAvailable models for testing:")
-    for key, config in MODEL_CONFIGS.items():
-        print(f"  {key}: {config['name']}")
-    
-    model_choice = input(f"\nWhich model to use? (default: {CURRENT_MODEL}): ").strip().lower()
-    if model_choice and model_choice in MODEL_CONFIGS:
-        switch_model(model_choice)
     
     suggestions = ""
     iteration = 0
     
-    # Step 1: Generate metadata and image prompts
-    result_1 = await Runner.run(generation_agent, f"Please generate the materials needed for 3D CAD generation for: {query}", session=session)
+    # Step 1: Generate prompt and metadata using GPT-4o
+    print(f"📝 Creating image generation prompt for: {query}")
+    print(f"⏱️  This may take a few minutes...")
     
-    # Parse the structured output
     try:
-        # Try to parse as JSON first
+        # Add timeout to the Runner.run call
+        result_1 = await asyncio.wait_for(
+            Runner.run(generation_agent, f"Please generate the materials needed for 3D CAD generation for: {query}", session=session),
+            timeout=300  # 5 minutes timeout
+        )
+        print(f"✅ Prompt generation completed!")
+        print(f"📄 Response length: {len(result_1.final_output)} characters")
+        print(f"📄 Response preview: {result_1.final_output[:200]}...")
+    except asyncio.TimeoutError:
+        print(f"❌ Prompt generation timed out after 5 minutes")
+        raise
+    except Exception as e:
+        print(f"❌ Error during prompt generation: {e}")
+        raise
+    
+    # Parse the structured output for metadata and image prompt
+    try:
         import json
         parsed_output = json.loads(result_1.final_output)
         metadata = parsed_output.get("metadata", "")
-        image_prompts = parsed_output.get("image_prompts", [])
-    except (json.JSONDecodeError, KeyError):
+        description = parsed_output.get("description", "")
+        image_prompt = parsed_output.get("image_prompt", "")
+        print(f"✅ Successfully parsed JSON response")
+        print(f"📝 Metadata length: {len(metadata)} characters")
+        print(f"🎨 Image prompt length: {len(image_prompt)} characters")
+    except (json.JSONDecodeError, KeyError) as e:
+        print(f"⚠️  Failed to parse JSON response: {e}")
+        print(f"📄 Raw response: {result_1.final_output}")
         # Fallback to extracting from text
         metadata = result_1.final_output
-        image_prompts = []
+        description = ""
+        image_prompt = ""
     
-    # Step 2: Generate images from prompts
+    # Step 2: Generate image using DALL-E 3
     image_urls = []
-    if image_prompts:
-        print(f"\nGenerating {len(image_prompts)} images from prompts...")
-        image_urls, _ = await generate_images_from_prompts(image_prompts)
+    if image_prompt:
+        print(f"🎨 Generating image with DALL-E 3...")
+        image_url = await generate_image_with_dalle3(image_prompt)
+        if image_url:
+            image_urls.append(image_url)
+            print(f"✅ Successfully generated image: {image_url[:50]}...")
+        else:
+            print(f"❌ Failed to generate image with DALL-E 3")
+            image_urls = ["placeholder_image_url"]
     else:
-        # Fallback: extract URLs from text if prompts weren't found
-        image_urls = extract_image_urls_from_text(metadata)
+        print(f"⚠️  No image prompt found in response")
+        image_urls = ["placeholder_image_url"]
     
     # Step 3: Download images locally
     local_image_paths = []
@@ -938,26 +1167,34 @@ async def main():
             f"Additionally, consider the scores and reasoning provided in the evaluation report for the previous generation attempt:\n\n{parsed_evaluation['markdown_report']}."
         )
         
-        # Generate improved version with new prompts and images
+        # Generate improved version with new prompt
         result_1 = await Runner.run(generation_agent, new_prompt, session=session)
         
-        # Parse the structured output again
+        # Parse the structured output for metadata and image prompt
         try:
             parsed_output = json.loads(result_1.final_output)
             metadata = parsed_output.get("metadata", "")
-            image_prompts = parsed_output.get("image_prompts", [])
             description = parsed_output.get("description", "")
+            image_prompt = parsed_output.get("image_prompt", "")
         except (json.JSONDecodeError, KeyError):
             metadata = result_1.final_output
-            image_prompts = []
             description = ""
+            image_prompt = ""
         
-        # Generate new images from prompts
-        if image_prompts:
-            print(f"\nGenerating {len(image_prompts)} new images from prompts...")
-            image_urls, _ = await generate_images_from_prompts(image_prompts)
+        # Generate new image using DALL-E 3
+        image_urls = []
+        if image_prompt:
+            print(f"🎨 Generating improved image with DALL-E 3...")
+            image_url = await generate_image_with_dalle3(image_prompt)
+            if image_url:
+                image_urls.append(image_url)
+                print(f"✅ Successfully generated improved image: {image_url[:50]}...")
+            else:
+                print(f"❌ Failed to generate improved image with DALL-E 3")
+                image_urls = ["placeholder_image_url"]
         else:
-            image_urls = extract_image_urls_from_text(metadata)
+            print(f"⚠️  No image prompt found in improved response")
+            image_urls = ["placeholder_image_url"]
         
         # Download new images locally
         local_image_paths = []

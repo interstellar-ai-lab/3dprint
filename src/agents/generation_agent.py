@@ -2,8 +2,21 @@ from pydantic import BaseModel
 from agents import Agent, ImageGenerationTool, Runner, trace, OpenAIChatCompletionsModel
 from openai import AsyncOpenAI
 from agents import set_tracing_disabled
+import os
 
-openai_client = AsyncOpenAI(api_key="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")
+# Load environment variables from .env file (for local development)
+from dotenv import load_dotenv
+load_dotenv()
+
+# Use environment variable for API key
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise ValueError(
+        "OPENAI_API_KEY not found. Please set it in your .env file for local development "
+        "or in your Vercel environment variables for deployment."
+    )
+
+openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 set_tracing_disabled(disabled=True)
 model = OpenAIChatCompletionsModel(
     model="gpt-4o",
