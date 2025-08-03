@@ -6,7 +6,6 @@ import sys
 import uuid
 import pathlib
 import asyncio
-import aiohttp
 from datetime import datetime
 from typing import Optional, Dict, Any
 import base64
