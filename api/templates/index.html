@@ -27,6 +27,17 @@
             overflow: hidden;
         }
 
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 15px;
+            }
+            
+            body {
+                padding: 10px;
+            }
+        }
+
         .header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -45,8 +56,48 @@
             opacity: 0.9;
         }
 
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .header p {
+                font-size: 1rem;
+            }
+            
+            .header {
+                padding: 30px 20px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 1.5rem;
+            }
+            
+            .header p {
+                font-size: 0.9rem;
+            }
+            
+            .header {
+                padding: 20px 15px;
+            }
+        }
+
         .content {
             padding: 40px;
+        }
+
+        @media (max-width: 768px) {
+            .content {
+                padding: 30px 20px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .content {
+                padding: 20px 15px;
+            }
         }
 
         .input-section {
@@ -60,6 +111,42 @@
             display: flex;
             gap: 15px;
             align-items: center;
+            flex-wrap: wrap;
+        }
+
+        @media (max-width: 768px) {
+            .input-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .input-group input,
+            .input-group select,
+            .input-group button {
+                width: 100%;
+                margin-bottom: 10px;
+            }
+            
+            .input-group button {
+                margin-bottom: 0;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .input-group {
+                gap: 10px;
+            }
+            
+            .input-group input,
+            .input-group select {
+                padding: 12px 15px;
+                font-size: 0.9rem;
+            }
+            
+            .input-group button {
+                padding: 12px 20px;
+                font-size: 0.9rem;
+            }
         }
 
         input[type="text"] {
@@ -72,6 +159,21 @@
         }
 
         input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        select {
+            padding: 15px 20px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 1rem;
+            background: white;
+            transition: border-color 0.3s ease;
+            cursor: pointer;
+        }
+
+        select:focus {
             outline: none;
             border-color: #667eea;
         }
@@ -281,8 +383,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎨 Multi agent to generate 3D reconstruction models</h1>
-            <p>Generate perfect multiview images for 3D reconstruction using AI</p>
+            <h1>🎨 Multi agent to generate 3D images</h1>
+            <p>Generate perfect 3D images using AI</p>
         </div>
 
         <div class="content">
@@ -290,7 +392,18 @@
                 <h2>Start New Generation</h2>
                 <div class="input-group">
                     <input type="text" id="targetObject" placeholder="Enter target object (e.g., Golden Retriever dog, sports car, coffee mug)" />
+                    <select id="modeSelect">
+                        <option value="quick">🚀 Quick Mode (3 iterations)</option>
+                        <option value="deep">🧠 Deep Think Mode (10 iterations)</option>
+                    </select>
                     <button onclick="startGeneration()" id="generateBtn">🚀 Start Generation</button>
+                </div>
+                <div style="margin-top: 15px; padding: 15px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;">
+                    <h4 style="margin: 0 0 10px 0; color: #1976d2;">Mode Selection:</h4>
+                    <ul style="margin: 0; padding-left: 20px; color: #1976d2;">
+                        <li><strong>Quick Mode:</strong> Fast generation with 3 iterations - good for initial testing</li>
+                        <li><strong>Deep Think Mode:</strong> Comprehensive generation with 10 iterations - best quality results</li>
+                    </ul>
                 </div>
             </div>
 
@@ -323,6 +436,8 @@
 
         async function startGeneration() {
             const targetObject = document.getElementById('targetObject').value.trim();
+            const mode = document.getElementById('modeSelect').value;
+            
             if (!targetObject) {
                 showError('Please enter a target object');
                 return;
@@ -338,7 +453,10 @@
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ target_object: targetObject })
+                    body: JSON.stringify({ 
+                        target_object: targetObject,
+                        mode: mode
+                    })
                 });
 
                 const data = await response.json();
@@ -408,16 +526,18 @@
             // Update status card class
             statusCard.className = `status-card ${data.status}`;
 
-            // Update title
-            statusTitle.textContent = `${data.target_object} - ${data.status.charAt(0).toUpperCase() + data.status.slice(1)}`;
+            // Update title with mode information
+            const modeDisplay = data.mode === 'deep' ? 'Deep Think Mode' : 'Quick Mode';
+            statusTitle.textContent = `${data.target_object} - ${modeDisplay} - ${data.status.charAt(0).toUpperCase() + data.status.slice(1)}`;
 
             // Update progress
             const iterations = data.iterations || [];
             const currentIteration = data.current_iteration || 0;
+            const maxIterations = data.max_iterations || 3;
             
             if (data.status === 'running') {
-                progressText.textContent = `Iteration ${currentIteration} in progress...`;
-                progressFill.style.width = `${Math.min((currentIteration / 10) * 100, 100)}%`;
+                progressText.textContent = `Iteration ${currentIteration} in progress... (${currentIteration}/${maxIterations})`;
+                progressFill.style.width = `${Math.min((currentIteration / maxIterations) * 100, 100)}%`;
             } else if (data.status === 'completed') {
                 progressText.textContent = `Completed! Final score: ${data.final_score.toFixed(1)}/10`;
                 progressFill.style.width = '100%';
@@ -467,33 +587,6 @@
                         <p>URL: /api/image/${currentSessionId}/${iterationNumber}</p>
                     </div>
                 </div>
-                
-                ${issues.length > 0 ? `
-                    <div class="feedback-section">
-                        <h4>🔍 Issues Found:</h4>
-                        <ul>
-                            ${issues.map(issue => `<li>${issue}</li>`).join('')}
-                        </ul>
-                    </div>
-                ` : ''}
-                
-                ${suggestions.length > 0 ? `
-                    <div class="suggestions">
-                        <h4>💡 Suggestions for Improvement:</h4>
-                        <ul>
-                            ${suggestions.map(suggestion => `<li>${suggestion}</li>`).join('')}
-                        </ul>
-                    </div>
-                ` : ''}
-                
-                ${issues.length === 0 && suggestions.length === 0 ? `
-                    <div class="feedback-section">
-                        <h4>🔍 Debug Info:</h4>
-                        <p>No feedback data found for this iteration.</p>
-                        <p><strong>Evaluation structure:</strong></p>
-                        <pre style="font-size: 0.8em; background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto;">${JSON.stringify(evaluation, null, 2)}</pre>
-                    </div>
-                ` : ''}
             `;
 
             return card;

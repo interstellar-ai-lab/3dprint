@@ -10,6 +10,7 @@ This is a Flask-based web application that provides a modern UI/UX for the 3D Ge
 - 🔲 **3D Mesh Support**: Download generated 3D mesh files
 - 📊 **Progress Tracking**: Visual progress bar and status indicators
 - 📱 **Mobile Responsive**: Works on desktop and mobile devices
+- ⚡ **Dual Generation Modes**: Quick Mode (3 iterations) and Deep Think Mode (10 iterations)
 
 ## Installation
 
@@ -53,7 +54,7 @@ The app includes a `vercel.json` configuration file that:
 
 ### Core Endpoints
 - `GET /` - Main application page
-- `POST /api/generate` - Start a new generation session
+- `POST /api/generate` - Start a new generation session (supports `mode` parameter: "quick" or "deep")
 - `GET /api/status/<session_id>` - Get status of a generation session
 - `GET /api/health` - Health check endpoint
 
@@ -97,6 +98,22 @@ api/
 - **Error Handling**: User-friendly error messages with auto-dismiss
 - **Download Integration**: Direct file downloads for generated content
 
+## Generation Modes
+
+The application supports two different generation modes to suit different use cases:
+
+### 🚀 Quick Mode (3 iterations)
+- **Best for**: Initial testing and rapid prototyping
+- **Iterations**: Maximum 3 iterations
+- **Use case**: When you want to quickly see results and iterate on the concept
+- **Time**: Faster generation, typically 2-3 minutes
+
+### 🧠 Deep Think Mode (10 iterations)
+- **Best for**: Production-quality results and final outputs
+- **Iterations**: Maximum 10 iterations
+- **Use case**: When you need the highest quality results for 3D reconstruction
+- **Time**: More comprehensive generation, typically 5-8 minutes
+
 ## Integration with Multi-Agent System
 
 The Flask app is designed to integrate with the existing multi-agent system:
@@ -105,6 +122,7 @@ The Flask app is designed to integrate with the existing multi-agent system:
 2. **Status Tracking**: Real-time updates on generation progress
 3. **File Handling**: Support for downloading generated meshes and visualizations
 4. **Iteration Support**: Track multiple iterations of the generation process
+5. **Mode Selection**: Choose between Quick and Deep Think modes based on requirements
 
 ## Development
 

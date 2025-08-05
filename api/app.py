@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Multi agent to generate 3D reconstruction models
+Multi agent to generate 3D images
 """
 
 from flask import Flask, request, jsonify, render_template, send_file
@@ -480,7 +480,7 @@ def meets_quality_threshold(scores: Dict) -> bool:
         all(score >= 7.0 for score in all_scores)  # Reasonable bar across all metrics
     )
 
-async def save_metadata(session_id: str, iteration: int, target_object: str, image_url: str, evaluation_results: Dict) -> str:
+async def save_metadata(session_id: str, iteration: int, target_object: str, image_url: str, evaluation_results: Dict, mode: str = "quick") -> str:
     """Save metadata for this iteration"""
     session_dir = pathlib.Path(f"generated_images/session_{session_id}")
     session_dir.mkdir(parents=True, exist_ok=True)
@@ -494,7 +494,8 @@ async def save_metadata(session_id: str, iteration: int, target_object: str, ima
         "image_url": image_url,
         "evaluation_results": evaluation_results,
         "generation_model": "gpt-image-1",
-        "evaluation_model": "gpt-4o"
+        "evaluation_model": "gpt-4o",
+        "mode": mode
     }
     
     with open(metadata_file, 'w') as f:
@@ -502,8 +503,8 @@ async def save_metadata(session_id: str, iteration: int, target_object: str, ima
     
     return str(metadata_file)
 
-async def run_hybrid_multiview_generation(session_id: str, target_object: str) -> Dict:
-    """Run iterative hybrid multiview generation"""
+async def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: str = "quick") -> Dict:
+    """Run iterative hybrid multiview generation with different modes"""
     
     session_id = session_id
     previous_feedback = []
@@ -511,10 +512,22 @@ async def run_hybrid_multiview_generation(session_id: str, target_object: str) -
     all_results = []
     iteration = 0
     
+    # Set iteration limits based on mode
+    if mode.lower() == "deep":
+        max_iterations = 10
+        mode_display = "Deep Think Mode"
+    else:  # quick mode (default)
+        max_iterations = 3
+        mode_display = "Quick Mode"
+    
+    print(f"🚀 Starting {mode_display} for '{target_object}' (max {max_iterations} iterations)")
+    
     # Initialize session
     active_sessions[session_id] = {
         "status": "running",
         "target_object": target_object,
+        "mode": mode,
+        "max_iterations": max_iterations,
         "current_iteration": 0,
         "iterations": [],
         "final_score": 0
@@ -523,11 +536,11 @@ async def run_hybrid_multiview_generation(session_id: str, target_object: str) -
     while True:
         iteration += 1
         
-        # Add maximum iteration limit to prevent infinite loops
-        if iteration > 15:  # Allow up to 15 iterations for improvement
+        # Check iteration limit based on mode
+        if iteration > max_iterations:
             active_sessions[session_id]["status"] = "completed"
             active_sessions[session_id]["final_score"] = scores.get("overall", 0) if 'scores' in locals() else 0
-            active_sessions[session_id]["message"] = "Reached maximum iterations (15) - best result achieved"
+            active_sessions[session_id]["message"] = f"Reached maximum iterations ({max_iterations}) for {mode_display} - best result achieved"
             break
         
         # Update session status
@@ -545,7 +558,7 @@ async def run_hybrid_multiview_generation(session_id: str, target_object: str) -
         evaluation_results = await evaluate_image_with_gpt4v(image_url, target_object, iteration)
         
         # Save metadata
-        metadata_file = await save_metadata(session_id, iteration, target_object, image_url, evaluation_results)
+        metadata_file = await save_metadata(session_id, iteration, target_object, image_url, evaluation_results, mode)
         
         # Store results
         iteration_result = {
@@ -564,6 +577,7 @@ async def run_hybrid_multiview_generation(session_id: str, target_object: str) -
         if meets_quality_threshold(scores):
             active_sessions[session_id]["status"] = "completed"
             active_sessions[session_id]["final_score"] = scores.get("overall", 0)
+            active_sessions[session_id]["message"] = f"Quality threshold met in {mode_display} - generation completed"
             break
         
         # Store current image URL for next iteration
@@ -575,11 +589,12 @@ async def run_hybrid_multiview_generation(session_id: str, target_object: str) -
         scores = evaluation_results.get("scores", {})
         issues = evaluation_results.get("issues", [])
         
-        print(f"📊 Iteration {iteration} Evaluation Results:")
+        print(f"📊 Iteration {iteration} Evaluation Results ({mode_display}):")
         print(f"   Scores: {scores}")
         print(f"   Issues Found: {issues}")
         print(f"   Suggestions for Improvement: {previous_feedback}")
         print(f"   Overall Score: {scores.get('overall', 'N/A')}/10")
+        print(f"   Remaining iterations: {max_iterations - iteration}")
         
         # Add a small delay between iterations
         await asyncio.sleep(1)
@@ -587,6 +602,8 @@ async def run_hybrid_multiview_generation(session_id: str, target_object: str) -
     return {
         "session_id": session_id,
         "target_object": target_object,
+        "mode": mode,
+        "max_iterations": max_iterations,
         "iterations": all_results,
         "final_score": active_sessions[session_id]["final_score"]
     }
@@ -602,6 +619,7 @@ def generate():
     try:
         data = request.get_json()
         target_object = data.get('target_object', '').strip()
+        mode = data.get('mode', 'quick') # Default to 'quick' if not provided
         
         if not target_object:
             return jsonify({"error": "Target object is required"}), 400
@@ -611,7 +629,7 @@ def generate():
         
         # Start generation in background
         def run_generation():
-            asyncio.run(run_hybrid_multiview_generation(session_id, target_object))
+            asyncio.run(run_hybrid_multiview_generation(session_id, target_object, mode))
         
         # Run in background thread
         import threading
@@ -621,7 +639,7 @@ def generate():
         return jsonify({
             "session_id": session_id,
             "status": "started",
-            "message": f"Started iterative generation for: {target_object}"
+            "message": f"Started iterative generation for: {target_object} in {mode} mode"
         })
         
     except Exception as e:
@@ -640,6 +658,8 @@ def get_status(session_id):
             "session_id": session_id,
             "status": session["status"],
             "target_object": session["target_object"],
+            "mode": session["mode"],
+            "max_iterations": session["max_iterations"],
             "current_iteration": session["current_iteration"],
             "iterations": session["iterations"],
             "final_score": session["final_score"],
@@ -682,6 +702,8 @@ def list_sessions():
                 "session_id": session_id,
                 "status": session_data["status"],
                 "target_object": session_data["target_object"],
+                "mode": session_data["mode"],
+                "max_iterations": session_data["max_iterations"],
                 "current_iteration": session_data["current_iteration"],
                 "final_score": session_data["final_score"]
             })
