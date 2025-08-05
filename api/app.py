@@ -17,7 +17,7 @@ import base64
 from PIL import Image
 import io
 from openai import OpenAI, AsyncOpenAI
-import tempfile
+
 import aiohttp
 
 # Load environment variables
@@ -39,22 +39,17 @@ openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 openai_sync_client = OpenAI(api_key=OPENAI_API_KEY)
 
 async def download_image_to_pil(image_url: str) -> Optional[Image.Image]:
-    """Download image from URL or load from file and convert to PIL Image"""
+    """Download image from URL and convert to PIL Image"""
     try:
-        if image_url.startswith("file://"):
-            # Handle local file
-            file_path = image_url.replace("file://", "")
-            return Image.open(file_path)
-        else:
-            # Handle HTTP URL
-            async with aiohttp.ClientSession() as session:
-                async with session.get(image_url) as response:
-                    if response.status == 200:
-                        image_data = await response.read()
-                        return Image.open(io.BytesIO(image_data))
-                    else:
-                        print(f"Failed to download image from {image_url}: {response.status}")
-                        return None
+        # Handle HTTP URL
+        async with aiohttp.ClientSession() as session:
+            async with session.get(image_url) as response:
+                if response.status == 200:
+                    image_data = await response.read()
+                    return Image.open(io.BytesIO(image_data))
+                else:
+                    print(f"Failed to download image from {image_url}: {response.status}")
+                    return None
     except Exception as e:
         print(f"Error loading image from {image_url}: {e}")
         return None
@@ -143,29 +138,28 @@ VIEW REQUIREMENTS:
 
 OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION."""
                 
-                # Save PIL image to temporary file
-                temp_image_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
-                previous_image.save(temp_image_file, format='PNG')
-                temp_image_file.close()
+                # Convert PIL image to bytes for the API
+                image_buffer = io.BytesIO()
+                previous_image.save(image_buffer, format='PNG')
+                image_buffer.seek(0)
                 
                 # Create a proper mask with alpha channel for editing
                 # Create a white mask with transparency to allow full editing
                 mask_image = Image.new('RGBA', previous_image.size, (255, 255, 255, 255))
-                temp_mask_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
-                mask_image.save(temp_mask_file, format='PNG')
-                temp_mask_file.close()
+                mask_buffer = io.BytesIO()
+                mask_image.save(mask_buffer, format='PNG')
+                mask_buffer.seek(0)
                 
-                # Open files in binary mode for the API
-                with open(temp_image_file.name, "rb") as image_file, open(temp_mask_file.name, "rb") as mask_file:
-                    response = await asyncio.to_thread(
-                        openai_sync_client.images.edit,
-                        model="gpt-image-1",
-                        image=image_file,
-                        mask=mask_file,
-                        prompt=edit_instructions,
-                        n=1,
-                        size="1024x1024"
-                    )
+                # Use bytes directly for the API
+                response = await asyncio.to_thread(
+                    openai_sync_client.images.edit,
+                    model="gpt-image-1",
+                    image=image_buffer,
+                    mask=mask_buffer,
+                    prompt=edit_instructions,
+                    n=1,
+                    size="1024x1024"
+                )
         
         if hasattr(response, 'data') and response.data:
             # Check if it's a URL or base64 data
@@ -174,18 +168,14 @@ OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION."""
                 image_url = first_item.url
                 return image_url
             elif hasattr(first_item, 'b64_json') and first_item.b64_json:
-                # Handle base64 data
-                # Decode base64 and save to temporary file
+                # Handle base64 data - convert to data URL
                 try:
                     # Decode base64 data
                     image_data = base64.b64decode(first_item.b64_json)
                     
-                    # Create temporary file
-                    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
-                    temp_file.write(image_data)
-                    temp_file.close()
-                    
-                    return f"file://{temp_file.name}"
+                    # Convert to data URL
+                    data_url = f"data:image/png;base64,{first_item.b64_json}"
+                    return data_url
                 except Exception as e:
                     print(f"❌ Error handling base64 data: {e}")
                     return None
@@ -252,15 +242,22 @@ async def evaluate_image_with_gpt4v(image_url: str, target_object: str, iteratio
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            # Download and encode the image
-            image = await download_image_to_pil(image_url)
-            if not image:
-                raise Exception("Failed to download image")
-            
-            # Convert to base64
-            buffer = io.BytesIO()
-            image.save(buffer, format='PNG')
-            base64_image = base64.b64encode(buffer.getvalue()).decode('utf-8')
+            # Handle both URLs and data URLs
+            if image_url.startswith("data:image/"):
+                # Handle data URL directly
+                # Extract base64 data from data URL
+                header, encoded = image_url.split(",", 1)
+                base64_image = encoded
+            else:
+                # Download and encode the image
+                image = await download_image_to_pil(image_url)
+                if not image:
+                    raise Exception("Failed to download image")
+                
+                # Convert to base64
+                buffer = io.BytesIO()
+                image.save(buffer, format='PNG')
+                base64_image = base64.b64encode(buffer.getvalue()).decode('utf-8')
             
             # Call GPT-4 Vision API
             response = await openai_client.chat.completions.create(
@@ -481,11 +478,7 @@ def meets_quality_threshold(scores: Dict) -> bool:
     )
 
 async def save_metadata(session_id: str, iteration: int, target_object: str, image_url: str, evaluation_results: Dict, mode: str = "quick") -> str:
-    """Save metadata for this iteration"""
-    session_dir = pathlib.Path(f"generated_images/session_{session_id}")
-    session_dir.mkdir(parents=True, exist_ok=True)
-    
-    metadata_file = session_dir / f"metadata_iteration_{iteration:02d}.json"
+    """Save metadata for this iteration (in-memory only for Vercel compatibility)"""
     metadata_data = {
         "session_id": session_id,
         "iteration": iteration,
@@ -498,10 +491,16 @@ async def save_metadata(session_id: str, iteration: int, target_object: str, ima
         "mode": mode
     }
     
-    with open(metadata_file, 'w') as f:
-        json.dump(metadata_data, f, indent=2)
+    # Store metadata in session data instead of file system
+    if session_id not in active_sessions:
+        active_sessions[session_id] = {}
     
-    return str(metadata_file)
+    if "metadata" not in active_sessions[session_id]:
+        active_sessions[session_id]["metadata"] = {}
+    
+    active_sessions[session_id]["metadata"][f"iteration_{iteration:02d}"] = metadata_data
+    
+    return f"session_{session_id}_iteration_{iteration:02d}"
 
 async def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: str = "quick") -> Dict:
     """Run iterative hybrid multiview generation with different modes"""
@@ -683,11 +682,8 @@ def get_iteration_image(session_id, iteration):
         iteration_data = session["iterations"][iteration - 1]
         image_url = iteration_data["image_url"]
         
-        if image_url.startswith("file://"):
-            file_path = image_url.replace("file://", "")
-            return send_file(file_path, mimetype='image/png')
-        else:
-            return jsonify({"error": "Image not accessible"}), 404
+        # Return the image URL directly (either OpenAI URL or data URL)
+        return jsonify({"image_url": image_url})
             
     except Exception as e:
         return jsonify({"error": str(e)}), 500
