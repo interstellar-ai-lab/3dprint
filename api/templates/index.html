@@ -303,8 +303,6 @@
             border: 1px solid #e9ecef;
         }
 
-
-
         .feedback-section {
             background: #f8d7da;
             border: 1px solid #f5c6cb;
@@ -384,7 +382,7 @@
     <div class="container">
         <div class="header">
             <h1>🎨 Multi agent to generate 3D images</h1>
-            <p>Generate perfect 3D images using AI</p>
+            <p>Generate perfect 3D images using AI - EC2 Server Version</p>
         </div>
 
         <div class="content">
@@ -536,7 +534,11 @@
             const maxIterations = data.max_iterations || 3;
             
             if (data.status === 'running') {
-                progressText.textContent = `Iteration ${currentIteration} in progress... (${currentIteration}/${maxIterations})`;
+                let statusText = `Iteration ${currentIteration} in progress... (${currentIteration}/${maxIterations})`;
+                if (data.evaluation_status) {
+                    statusText += ` - ${data.evaluation_status}`;
+                }
+                progressText.textContent = statusText;
                 progressFill.style.width = `${Math.min((currentIteration / maxIterations) * 100, 100)}%`;
             } else if (data.status === 'completed') {
                 progressText.textContent = `Completed! Final score: ${data.final_score.toFixed(1)}/10`;
@@ -567,12 +569,54 @@
             const evaluation = iteration.evaluation || {};
             const issues = evaluation.issues || [];
             const suggestions = evaluation.suggestions || [];
+            const evaluationStatus = iteration.evaluation_status || 'completed';
 
             // Debug logging
             console.log(`Iteration ${iterationNumber} data:`, iteration);
             console.log(`Iteration ${iterationNumber} evaluation:`, evaluation);
-            console.log(`Iteration ${iterationNumber} issues:`, issues);
-            console.log(`Iteration ${iterationNumber} suggestions:`, suggestions);
+            console.log(`Iteration ${iterationNumber} evaluation_status:`, evaluationStatus);
+
+            let evaluationSection = '';
+            if (evaluationStatus === 'evaluating') {
+                evaluationSection = `
+                    <div style="text-align: center; padding: 20px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; margin-top: 15px;">
+                        <div class="spinner" style="width: 20px; height: 20px; margin: 0 auto 10px;"></div>
+                        <p style="color: #856404; margin: 0;">🔍 Evaluating image quality...</p>
+                    </div>
+                `;
+            } else if (evaluation && Object.keys(evaluation).length > 0) {
+                evaluationSection = `
+                    <div style="margin-top: 15px;">
+                        <h5>Evaluation Results:</h5>
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                            <strong>Scores:</strong>
+                            <ul style="margin: 10px 0; padding-left: 20px;">
+                                ${Object.entries(evaluation.scores || {}).map(([key, value]) => 
+                                    `<li>${key}: ${value}/10</li>`
+                                ).join('')}
+                            </ul>
+                        </div>
+                        
+                        ${issues.length > 0 ? `
+                            <div class="feedback-section">
+                                <h4>Issues Found:</h4>
+                                <ul>
+                                    ${issues.map(issue => `<li>${issue}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                        
+                        ${suggestions.length > 0 ? `
+                            <div class="suggestions">
+                                <h4>Suggestions for Improvement:</h4>
+                                <ul>
+                                    ${suggestions.map(suggestion => `<li>${suggestion}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
 
             card.innerHTML = `
                 <h4>Iteration ${iterationNumber}</h4>
@@ -587,6 +631,7 @@
                         <p>URL: /api/image/${currentSessionId}/${iterationNumber}</p>
                     </div>
                 </div>
+                ${evaluationSection}
             `;
 
             return card;
