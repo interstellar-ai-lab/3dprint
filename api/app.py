@@ -19,7 +19,6 @@ import io
 from openai import OpenAI, AsyncOpenAI
 
 import aiohttp
-import requests
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -692,14 +691,24 @@ def get_iteration_image(session_id, iteration):
         
         # Handle OpenAI URLs - download and serve the image
         elif image_url.startswith('http'):
-            import requests
-            response = requests.get(image_url)
-            if response.status_code == 200:
-                # Determine content type from response headers or URL
-                content_type = response.headers.get('content-type', 'image/png')
-                return Response(response.content, mimetype=content_type)
-            else:
-                return jsonify({"error": "Failed to fetch image from URL"}), 500
+            # Use aiohttp to download the image
+            async def download_image():
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(image_url) as response:
+                        if response.status == 200:
+                            # Determine content type from response headers or URL
+                            content_type = response.headers.get('content-type', 'image/png')
+                            image_data = await response.read()
+                            return Response(image_data, mimetype=content_type)
+                        else:
+                            return jsonify({"error": "Failed to fetch image from URL"}), 500
+            
+            # Since this is a synchronous Flask route, we need to run the async function
+            import asyncio
+            try:
+                return asyncio.run(download_image())
+            except Exception as e:
+                return jsonify({"error": f"Failed to download image: {str(e)}"}), 500
         
         else:
             return jsonify({"error": "Invalid image URL format"}), 400
