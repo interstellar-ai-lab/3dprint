@@ -2,12 +2,7 @@
   "version": 2,
   "functions": {
     "api/app.py": {
-      "maxDuration": 800,
-      "runtime": "python3.11",
-      "compute": {
-        "type": "fluid",
-        "cpu": "performance"
-      }
+      "maxDuration": 800
     }
   },
   "routes": [
