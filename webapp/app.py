@@ -66,7 +66,27 @@ async def download_image_to_pil(image_url: str) -> Optional[Image.Image]:
         logger.error(f"Error loading image from {image_url}: {e}")
         return None
 
-async def generate_multiview_with_gpt_image1(target_object: str, iteration: int = 1, previous_feedback: List[str] = None, previous_image_url: str = None) -> str:
+def download_image_to_pil_sync(image_url: str) -> Optional[Image.Image]:
+    """Download image from URL or load from file and convert to PIL Image (synchronous version)"""
+    try:
+        if image_url.startswith("file://"):
+            # Handle local file
+            file_path = image_url.replace("file://", "")
+            return Image.open(file_path)
+        else:
+            # Handle HTTP URL
+            import requests
+            response = requests.get(image_url, timeout=30)
+            if response.status_code == 200:
+                return Image.open(io.BytesIO(response.content))
+            else:
+                logger.error(f"Failed to download image from {image_url}: {response.status_code}")
+                return None
+    except Exception as e:
+        logger.error(f"Error loading image from {image_url}: {e}")
+        return None
+
+def generate_multiview_with_gpt_image1(target_object: str, iteration: int = 1, previous_feedback: List[str] = None, previous_image_url: str = None) -> str:
     """Generate 2x2 multiview image using GPT-Image-1 with image-to-image capability"""
     
     # Create the generation instructions
@@ -110,8 +130,7 @@ OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION. FAILURE TO
         # For first iteration - text to image
         if iteration == 1 or not previous_image_url:
             logger.info(f"🎨 Generating initial image for '{target_object}' (iteration {iteration})...")
-            response = await asyncio.to_thread(
-                openai_sync_client.images.generate,
+            response = openai_sync_client.images.generate(
                 model="gpt-image-1",
                 prompt=instructions,
                 size="1024x1024",
@@ -121,11 +140,10 @@ OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION. FAILURE TO
             logger.info(f"🎨 Editing previous image with feedback for '{target_object}' (iteration {iteration})...")
             
             # Download previous image
-            previous_image = await download_image_to_pil(previous_image_url)
+            previous_image = download_image_to_pil_sync(previous_image_url)
             if not previous_image:
                 logger.warning(f"⚠️  Could not load previous image for iteration {iteration}, using text-to-image generation instead")
-                response = await asyncio.to_thread(
-                    openai_sync_client.images.generate,
+                response = openai_sync_client.images.generate(
                     model="gpt-image-1",
                     prompt=instructions,
                     size="1024x1024",
@@ -153,28 +171,29 @@ VIEW REQUIREMENTS:
 
 OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION."""
                 
-                # Convert PIL image to bytes for the API
-                image_buffer = io.BytesIO()
-                previous_image.save(image_buffer, format='PNG')
-                image_buffer.seek(0)
+                # Save PIL image to temporary file
+                import tempfile
+                temp_image_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+                previous_image.save(temp_image_file, format='PNG')
+                temp_image_file.close()
                 
                 # Create a proper mask with alpha channel for editing
                 # Create a white mask with transparency to allow full editing
                 mask_image = Image.new('RGBA', previous_image.size, (255, 255, 255, 255))
-                mask_buffer = io.BytesIO()
-                mask_image.save(mask_buffer, format='PNG')
-                mask_buffer.seek(0)
+                temp_mask_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+                mask_image.save(temp_mask_file, format='PNG')
+                temp_mask_file.close()
                 
-                # Use bytes directly for the API
-                response = await asyncio.to_thread(
-                    openai_sync_client.images.edit,
-                    model="gpt-image-1",
-                    image=image_buffer,
-                    mask=mask_buffer,
-                    prompt=edit_instructions,
-                    n=1,
-                    size="1024x1024"
-                )
+                # Open files in binary mode for the API
+                with open(temp_image_file.name, "rb") as image_file, open(temp_mask_file.name, "rb") as mask_file:
+                    response = openai_sync_client.images.edit(
+                        model="gpt-image-1",
+                        image=image_file,
+                        mask=mask_file,
+                        prompt=edit_instructions,
+                        n=1,
+                        size="1024x1024"
+                    )
         
         if hasattr(response, 'data') and response.data:
             # Check if it's a URL or base64 data
@@ -183,14 +202,18 @@ OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION."""
                 image_url = first_item.url
                 return image_url
             elif hasattr(first_item, 'b64_json') and first_item.b64_json:
-                # Handle base64 data - convert to data URL
+                # Handle base64 data - save to PNG file
                 try:
                     # Decode base64 data
                     image_data = base64.b64decode(first_item.b64_json)
                     
-                    # Convert to data URL
-                    data_url = f"data:image/png;base64,{first_item.b64_json}"
-                    return data_url
+                    # Create temporary file
+                    import tempfile
+                    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+                    temp_file.write(image_data)
+                    temp_file.close()
+                    
+                    return f"file://{temp_file.name}"
                 except Exception as e:
                     logger.error(f"❌ Error handling base64 data: {e}")
                     return None
@@ -205,7 +228,7 @@ OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION."""
         logger.error(f"❌ Error generating with GPT-4 Vision: {e}")
         return None
 
-async def evaluate_image_with_gpt4v(image_url: str, target_object: str, iteration: int) -> Dict:
+def evaluate_image_with_gpt4v(image_url: str, target_object: str, iteration: int) -> Dict:
     """Evaluate generated image using GPT-4 Vision"""
     
     evaluation_prompt = f"""Analyze this 2x2 multiview grid image of a {target_object} for 3D reconstruction suitability.
@@ -265,7 +288,7 @@ async def evaluate_image_with_gpt4v(image_url: str, target_object: str, iteratio
                 base64_image = encoded
             else:
                 # Download and encode the image
-                image = await download_image_to_pil(image_url)
+                image = download_image_to_pil_sync(image_url)
                 if not image:
                     raise Exception("Failed to download image")
                 
@@ -275,7 +298,7 @@ async def evaluate_image_with_gpt4v(image_url: str, target_object: str, iteratio
                 base64_image = base64.b64encode(buffer.getvalue()).decode('utf-8')
             
             # Call GPT-4 Vision API
-            response = await openai_client.chat.completions.create(
+            response = openai_sync_client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
                     {
@@ -309,7 +332,8 @@ async def evaluate_image_with_gpt4v(image_url: str, target_object: str, iteratio
             logger.error(f"❌ Evaluation attempt {attempt + 1} failed: {e}")
             if attempt < max_retries - 1:
                 logger.info(f"🔄 Retrying evaluation... (attempt {attempt + 2}/{max_retries})")
-                await asyncio.sleep(2)  # Wait before retry
+                import time
+                time.sleep(2)  # Wait before retry
             else:
                 logger.error(f"❌ All evaluation attempts failed, using fallback scores")
                 # Return fallback evaluation results
@@ -476,8 +500,12 @@ def meets_quality_threshold(scores: Dict) -> bool:
         all(score >= 7.0 for score in all_scores)  # Reasonable bar across all metrics
     )
 
-async def save_metadata(session_id: str, iteration: int, target_object: str, image_url: str, evaluation_results: Dict, mode: str = "quick") -> str:
-    """Save metadata for this iteration (in-memory only for server compatibility)"""
+def save_metadata(session_id: str, iteration: int, target_object: str, image_url: str, evaluation_results: Dict, mode: str = "quick") -> str:
+    """Save metadata for this iteration"""
+    session_dir = pathlib.Path(f"generated_images/session_{session_id}")
+    session_dir.mkdir(parents=True, exist_ok=True)
+    
+    metadata_file = session_dir / f"metadata_iteration_{iteration:02d}.json"
     metadata_data = {
         "session_id": session_id,
         "iteration": iteration,
@@ -490,18 +518,12 @@ async def save_metadata(session_id: str, iteration: int, target_object: str, ima
         "mode": mode
     }
     
-    # Store metadata in session data instead of file system
-    if session_id not in active_sessions:
-        active_sessions[session_id] = {}
+    with open(metadata_file, 'w') as f:
+        json.dump(metadata_data, f, indent=2)
     
-    if "metadata" not in active_sessions[session_id]:
-        active_sessions[session_id]["metadata"] = {}
-    
-    active_sessions[session_id]["metadata"][f"iteration_{iteration:02d}"] = metadata_data
-    
-    return f"session_{session_id}_iteration_{iteration:02d}"
+    return str(metadata_file)
 
-async def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: str = "quick") -> Dict:
+def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: str = "quick") -> Dict:
     """Run iterative hybrid multiview generation with different modes"""
     
     session_id = session_id
@@ -528,7 +550,8 @@ async def run_hybrid_multiview_generation(session_id: str, target_object: str, m
         "max_iterations": max_iterations,
         "current_iteration": 0,
         "iterations": [],
-        "final_score": 0
+        "final_score": 0,
+        "evaluation_status": None
     }
     
     while True:
@@ -545,30 +568,42 @@ async def run_hybrid_multiview_generation(session_id: str, target_object: str, m
         active_sessions[session_id]["current_iteration"] = iteration
         
         # Generate image with GPT-Image-1 (image-to-image for iterations > 1)
-        image_url = await generate_multiview_with_gpt_image1(target_object, iteration, previous_feedback, previous_image_url)
+        image_url = generate_multiview_with_gpt_image1(target_object, iteration, previous_feedback, previous_image_url)
         
         if not image_url:
             active_sessions[session_id]["status"] = "failed"
             active_sessions[session_id]["error"] = "Failed to generate image"
             break
         
-        # Evaluate image with GPT-4 Vision
-        evaluation_results = await evaluate_image_with_gpt4v(image_url, target_object, iteration)
-        
-        # Save metadata
-        metadata_file = await save_metadata(session_id, iteration, target_object, image_url, evaluation_results, mode)
-        
-        # Store results
+        # IMMEDIATELY add the image to session (before evaluation)
         iteration_result = {
             "iteration": iteration,
             "image_url": image_url,
-            "evaluation": evaluation_results,
-            "metadata_file": metadata_file
+            "evaluation": None,  # Will be updated after evaluation
+            "metadata_file": None,  # Will be updated after evaluation
+            "evaluation_status": "evaluating"  # Show evaluation progress
         }
         all_results.append(iteration_result)
         
-        # Update session with iteration data
+        # Update session with iteration data IMMEDIATELY
         active_sessions[session_id]["iterations"].append(iteration_result)
+        
+        # Update session status to show evaluation progress
+        active_sessions[session_id]["evaluation_status"] = f"Evaluating iteration {iteration}..."
+        
+        # Evaluate image with GPT-4 Vision
+        evaluation_results = evaluate_image_with_gpt4v(image_url, target_object, iteration)
+        
+        # Save metadata
+        metadata_file = save_metadata(session_id, iteration, target_object, image_url, evaluation_results, mode)
+        
+        # Update the existing iteration_result with evaluation data
+        active_sessions[session_id]["iterations"][-1]["evaluation"] = evaluation_results
+        active_sessions[session_id]["iterations"][-1]["metadata_file"] = metadata_file
+        active_sessions[session_id]["iterations"][-1]["evaluation_status"] = "completed"
+        
+        # Clear evaluation status
+        active_sessions[session_id]["evaluation_status"] = None
         
         # Check if quality threshold is met
         scores = evaluation_results.get("scores", {})
@@ -601,8 +636,9 @@ async def run_hybrid_multiview_generation(session_id: str, target_object: str, m
         logger.info(f"   Overall Score: {scores.get('overall', 'N/A')}/10")
         logger.info(f"   Remaining iterations: {max_iterations - iteration}")
         
-        # Add a small delay between iterations
-        await asyncio.sleep(1)
+        # Add a minimal delay between iterations to prevent overwhelming the API
+        import time
+        time.sleep(0.5)
     
     return {
         "session_id": session_id,
@@ -634,7 +670,13 @@ def generate():
         
         # Start generation in background
         def run_generation():
-            asyncio.run(run_hybrid_multiview_generation(session_id, target_object, mode))
+            try:
+                run_hybrid_multiview_generation(session_id, target_object, mode)
+            except Exception as e:
+                logger.error(f"Error in generation thread for session {session_id}: {e}")
+                if session_id in active_sessions:
+                    active_sessions[session_id]["status"] = "failed"
+                    active_sessions[session_id]["error"] = str(e)
         
         # Run in background thread
         thread = threading.Thread(target=run_generation)
@@ -671,7 +713,8 @@ def get_status(session_id):
             "current_iteration": session["current_iteration"],
             "iterations": session["iterations"],
             "final_score": session["final_score"],
-            "error": session.get("error", None)
+            "error": session.get("error", None),
+            "evaluation_status": session.get("evaluation_status", None)
         })
         
     except Exception as e:
@@ -692,8 +735,13 @@ def get_iteration_image(session_id, iteration):
         iteration_data = session["iterations"][iteration - 1]
         image_url = iteration_data["image_url"]
         
+        # Handle file URLs
+        if image_url.startswith('file://'):
+            file_path = image_url.replace('file://', '')
+            return send_file(file_path, mimetype='image/png')
+        
         # Handle base64 data URLs
-        if image_url.startswith('data:image/'):
+        elif image_url.startswith('data:image/'):
             # Extract the base64 data
             header, encoded = image_url.split(",", 1)
             image_data = base64.b64decode(encoded)
@@ -706,21 +754,16 @@ def get_iteration_image(session_id, iteration):
         
         # Handle OpenAI URLs - download and serve the image
         elif image_url.startswith('http'):
-            # Use aiohttp to download the image
-            async def download_image():
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(image_url) as response:
-                        if response.status == 200:
-                            # Determine content type from response headers or URL
-                            content_type = response.headers.get('content-type', 'image/png')
-                            image_data = await response.read()
-                            return Response(image_data, mimetype=content_type)
-                        else:
-                            return jsonify({"error": "Failed to fetch image from URL"}), 500
-            
-            # Since this is a synchronous Flask route, we need to run the async function
+            # Use requests to download the image
             try:
-                return asyncio.run(download_image())
+                import requests
+                response = requests.get(image_url, timeout=30)
+                if response.status_code == 200:
+                    # Determine content type from response headers or URL
+                    content_type = response.headers.get('content-type', 'image/png')
+                    return Response(response.content, mimetype=content_type)
+                else:
+                    return jsonify({"error": "Failed to fetch image from URL"}), 500
             except Exception as e:
                 logger.error(f"Failed to download image: {e}")
                 return jsonify({"error": f"Failed to download image: {str(e)}"}), 500
