@@ -19,6 +19,7 @@ import io
 from openai import OpenAI, AsyncOpenAI
 
 import aiohttp
+import requests
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -92,6 +93,9 @@ OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION. FAILURE TO
             instructions += f" IMPORTANT: Address these specific issues from previous iteration: {feedback_text}"
     
     try:
+        # Debug logging
+        print(f"🔍 Debug: iteration={iteration}, previous_image_url={'None' if previous_image_url is None else 'exists'}")
+        
         # For first iteration - text to image
         if iteration == 1 or not previous_image_url:
             print(f"🎨 Generating initial image for '{target_object}' (iteration {iteration})...")
@@ -108,7 +112,7 @@ OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION. FAILURE TO
             # Download previous image
             previous_image = await download_image_to_pil(previous_image_url)
             if not previous_image:
-                print(f"❌ Failed to load previous image, falling back to text generation")
+                print(f"⚠️  Could not load previous image for iteration {iteration}, using text-to-image generation instead")
                 response = await asyncio.to_thread(
                     openai_sync_client.images.generate,
                     model="gpt-image-1",
@@ -180,10 +184,10 @@ OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION."""
                     print(f"❌ Error handling base64 data: {e}")
                     return None
             else:
-                print(f"❌ Unexpected response format: {first_item}")
+                print(f"❌ Unexpected response format")
                 return None
         else:
-            print(f"❌ No image data in response: {response}")
+            print(f"❌ No image data in response")
             return None
         
     except Exception as e:
@@ -276,8 +280,7 @@ async def evaluate_image_with_gpt4v(image_url: str, target_object: str, iteratio
             )
             
             evaluation_text = response.choices[0].message.content
-            print(f"🔍 Raw evaluation text for iteration {iteration}:")
-            print(f"   {evaluation_text}")
+            print(f"🔍 Evaluation completed for iteration {iteration} (text length: {len(evaluation_text)} chars)")
             
             # Check if the response indicates failure
             if "I'm sorry" in evaluation_text or "I can't assist" in evaluation_text:
@@ -315,11 +318,7 @@ async def evaluate_image_with_gpt4v(image_url: str, target_object: str, iteratio
 
 def parse_evaluation_text(text: str) -> Dict:
     """Parse evaluation text into structured data"""
-    print(f"🔍 Starting to parse evaluation text...")
-    print(f"   Text length: {len(text)} characters")
-    
     lines = text.split('\n')
-    print(f"   Number of lines: {len(lines)}")
     
     scores = {}
     issues = []
@@ -341,7 +340,6 @@ def parse_evaluation_text(text: str) -> Dict:
                     try:
                         score = float(score_part.split('/')[0])
                         scores[metric] = score
-                        print(f"   ✅ Extracted score: {metric} = {score}")
                     except ValueError:
                         print(f"   ❌ Could not parse score from: {line}")
         
@@ -364,10 +362,8 @@ def parse_evaluation_text(text: str) -> Dict:
                 issue = line[1:].strip()
                 if issue:  # Only add non-empty issues
                     issues.append(issue)
-                    print(f"   ✅ Extracted issue: {issue}")
             elif line and not line.startswith('Specific Issues Found:'):
                 issues.append(line)
-                print(f"   ✅ Extracted issue: {line}")
         
         # Extract suggestions
         if in_suggestions and line:
@@ -375,21 +371,13 @@ def parse_evaluation_text(text: str) -> Dict:
                 suggestion = line[1:].strip()
                 if suggestion:  # Only add non-empty suggestions
                     suggestions.append(suggestion)
-                    print(f"   ✅ Extracted suggestion: {suggestion}")
             elif line and not line.startswith('Suggestions for Improvement:'):
                 suggestions.append(line)
-                print(f"   ✅ Extracted suggestion: {line}")
     
     # Calculate overall score if not present
     if 'Overall Score' not in scores and scores:
         overall_score = sum(scores.values()) / len(scores)
         scores['overall'] = overall_score
-        print(f"   📊 Calculated overall score: {overall_score}")
-    
-    print(f"📋 Parsed evaluation results:")
-    print(f"   Parsed scores: {scores}")
-    print(f"   Parsed issues: {issues}")
-    print(f"   Parsed suggestions: {suggestions}")
     
     return {
         "scores": scores,
@@ -581,7 +569,14 @@ async def run_hybrid_multiview_generation(session_id: str, target_object: str, m
         
         # Store current image URL for next iteration
         previous_image_url = image_url
-        print(f"📸 Stored image URL for iteration {iteration}: {image_url[:50]}...")
+        
+        # Print image URL info without cluttering the console
+        if image_url.startswith('data:image/'):
+            print(f"📸 Stored base64 image for iteration {iteration}")
+        elif image_url.startswith('http'):
+            print(f"📸 Stored remote image URL for iteration {iteration}: {image_url[:50]}...")
+        else:
+            print(f"📸 Stored image for iteration {iteration}")
         
         # Prepare feedback for next iteration
         previous_feedback = evaluation_results.get("suggestions", [])
@@ -682,8 +677,32 @@ def get_iteration_image(session_id, iteration):
         iteration_data = session["iterations"][iteration - 1]
         image_url = iteration_data["image_url"]
         
-        # Return the image URL directly (either OpenAI URL or data URL)
-        return jsonify({"image_url": image_url})
+        # Handle base64 data URLs
+        if image_url.startswith('data:image/'):
+            # Extract the base64 data
+            header, encoded = image_url.split(",", 1)
+            image_data = base64.b64decode(encoded)
+            
+            # Determine content type from the data URL
+            content_type = header.split(":")[1].split(";")[0]
+            
+            # Return the image data directly
+            from flask import Response
+            return Response(image_data, mimetype=content_type)
+        
+        # Handle OpenAI URLs - download and serve the image
+        elif image_url.startswith('http'):
+            import requests
+            response = requests.get(image_url)
+            if response.status_code == 200:
+                # Determine content type from response headers or URL
+                content_type = response.headers.get('content-type', 'image/png')
+                return Response(response.content, mimetype=content_type)
+            else:
+                return jsonify({"error": "Failed to fetch image from URL"}), 500
+        
+        else:
+            return jsonify({"error": "Invalid image URL format"}), 400
             
     except Exception as e:
         return jsonify({"error": str(e)}), 500
