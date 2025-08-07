@@ -13,7 +13,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise ValueError(
         "OPENAI_API_KEY not found. Please set it in your .env file for local development "
-        "or in your Vercel environment variables for deployment."
+        "or in your environment variables for deployment."
     )
 
 openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)

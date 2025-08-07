@@ -29,26 +29,28 @@ python app.py
 http://localhost:8080
 ```
 
-## Deployment to Vercel
+## Deployment
 
-1. Make sure you have the Vercel CLI installed:
+The Flask app can be deployed to various platforms:
+
+### Local Development
 ```bash
-npm install -g vercel
+python app.py
 ```
 
-2. Deploy to Vercel:
+### Production Deployment
+For production deployment, use a WSGI server like Gunicorn:
 ```bash
-vercel
+pip install gunicorn
+gunicorn -w 4 -b 0.0.0.0:8080 app:app
 ```
 
-3. The app will be available at your Vercel URL (e.g., `https://your-app.vercel.app`)
-
-### Vercel Configuration
-
-The app includes a `vercel.json` configuration file that:
-- Uses the Python runtime for Flask
-- Routes all requests to `app.py`
-- Handles static files and templates automatically
+### Cloud Platforms
+The app is compatible with various cloud platforms:
+- **Heroku**: Use Procfile with `web: gunicorn app:app`
+- **AWS**: Deploy to EC2 or use AWS Lambda with API Gateway
+- **Google Cloud**: Deploy to App Engine or Cloud Run
+- **Azure**: Deploy to App Service or Container Instances
 
 ## API Endpoints
 
@@ -70,13 +72,14 @@ The app includes a `vercel.json` configuration file that:
 
 ```
 api/
-├── app.py                 # Main Flask application
 ├── requirements.txt       # Python dependencies
 ├── templates/
 │   └── index.html        # Main HTML template
 ├── static/               # Static assets (CSS, JS, images)
 └── README.md            # This file
 ```
+
+**Note**: The main Flask application (`app.py`) has been removed as it was specific to Vercel deployment. The web application functionality is now available in the `webapp/` directory.
 
 ## UI/UX Features
 
@@ -149,9 +152,9 @@ The frontend JavaScript handles:
 
 This Flask app is designed to be easily deployable on various platforms:
 
-- **Local Development**: Run with `python app.py`
+- **Local Development**: Run with `python app.py` (when available)
 - **Production**: Use a WSGI server like Gunicorn
-- **Cloud Platforms**: Compatible with Heroku, Vercel, AWS, etc.
+- **Cloud Platforms**: Compatible with Heroku, AWS, Google Cloud, Azure, etc.
 
 ## Future Enhancements
 
