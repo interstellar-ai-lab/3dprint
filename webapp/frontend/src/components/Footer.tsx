@@ -66,24 +66,6 @@ export const Footer: React.FC = () => {
             </div>
           </div>
         </div>
-
-        {/* Contact CTA */}
-        <div className="mt-12 bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl p-8 text-center">
-          <h3 className="text-2xl font-bold mb-4">
-            Ready to Transform Your 3D Workflow?
-          </h3>
-          <p className="text-lg opacity-90 mb-6">
-            Join game studios, creative agencies, and design teams already using Vicino AI.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button className="bg-white text-purple-600 px-6 py-3 rounded-full font-semibold hover:bg-gray-100 transition-all duration-300">
-              Schedule Demo
-            </button>
-            <button className="border-2 border-white text-white px-6 py-3 rounded-full font-semibold hover:bg-white hover:text-purple-600 transition-all duration-300">
-              Contact Sales
-            </button>
-          </div>
-        </div>
       </div>
     </footer>
   );
