@@ -1,8 +1,7 @@
 import axios from 'axios';
 import { GenerationSession } from '../stores/generationStore';
 
-// Use relative URLs to work with the proxy configuration
-const API_BASE_URL = process.env.REACT_APP_API_URL || '';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://vicino.ai:8001';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
