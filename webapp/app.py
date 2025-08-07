@@ -37,7 +37,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 
 # Store active sessions (in production, use a proper database)
 active_sessions = {}
@@ -808,4 +814,4 @@ def health():
 
 if __name__ == '__main__':
     # For production deployment on EC2
-    app.run(debug=False, host='0.0.0.0', port=8000) 
+    app.run(debug=False, host='0.0.0.0', port=8001) 

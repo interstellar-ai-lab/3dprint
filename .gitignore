@@ -99,3 +99,4 @@ coverage.xml
 dmypy.json
 
 api/generated_images/*
+webapp/frontend/node_modules/*
