@@ -589,7 +589,7 @@ def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: s
         active_sessions[session_id]["iterations"].append(iteration_result)
         
         # Update session status to show evaluation progress
-        active_sessions[session_id]["evaluation_status"] = f"Evaluating iteration {iteration}..."
+        active_sessions[session_id]["evaluation_status"] = f"Evaluating..."
         
         # Evaluate image with GPT-4 Vision
         evaluation_results = evaluate_image_with_gpt4v(image_url, target_object, iteration)

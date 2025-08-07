@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Iterative Multiview Generation</title>
+    <title>Multi-Agent 3D Generation</title>
     <style>
         * {
             margin: 0;
@@ -31,10 +31,25 @@
             .container {
                 margin: 10px;
                 border-radius: 15px;
+                max-width: calc(100vw - 20px);
+                overflow-x: hidden;
             }
             
             body {
                 padding: 10px;
+                overflow-x: hidden;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                margin: 5px;
+                border-radius: 12px;
+                max-width: calc(100vw - 10px);
+            }
+            
+            body {
+                padding: 5px;
             }
         }
 
@@ -279,6 +294,21 @@
             margin-top: 20px;
         }
 
+        @media (max-width: 768px) {
+            .iterations-grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+                margin-top: 15px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .iterations-grid {
+                gap: 10px;
+                margin-top: 10px;
+            }
+        }
+
         .iteration-card {
             background: white;
             border: 1px solid #e9ecef;
@@ -292,6 +322,25 @@
             box-shadow: 0 10px 20px rgba(0,0,0,0.1);
         }
 
+        @media (max-width: 768px) {
+            .iteration-card {
+                padding: 15px;
+                border-radius: 10px;
+            }
+            
+            .iteration-card:hover {
+                transform: none;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .iteration-card {
+                padding: 12px;
+                border-radius: 8px;
+            }
+        }
+
         .iteration-image {
             width: 100%;
             height: auto;
@@ -301,6 +350,22 @@
             margin-bottom: 15px;
             background-color: #f8f9fa;
             border: 1px solid #e9ecef;
+        }
+
+        @media (max-width: 768px) {
+            .iteration-image {
+                max-height: 400px;
+                border-radius: 6px;
+                margin-bottom: 12px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .iteration-image {
+                max-height: 300px;
+                border-radius: 4px;
+                margin-bottom: 10px;
+            }
         }
 
         .feedback-section {
@@ -382,7 +447,7 @@
     <div class="container">
         <div class="header">
             <h1>🎨 Multi agent to generate 3D images</h1>
-            <p>Generate perfect 3D images using AI - EC2 Server Version</p>
+            <p>Generate perfect 3D images using AI</p>
         </div>
 
         <div class="content">
@@ -391,16 +456,16 @@
                 <div class="input-group">
                     <input type="text" id="targetObject" placeholder="Enter target object (e.g., Golden Retriever dog, sports car, coffee mug)" />
                     <select id="modeSelect">
-                        <option value="quick">🚀 Quick Mode (3 iterations)</option>
-                        <option value="deep">🧠 Deep Think Mode (10 iterations)</option>
+                        <option value="quick">🚀 Quick Mode (5 minutes)</option>
+                        <option value="deep">🧠 Deep Think Mode (20 minutes)</option>
                     </select>
                     <button onclick="startGeneration()" id="generateBtn">🚀 Start Generation</button>
                 </div>
                 <div style="margin-top: 15px; padding: 15px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;">
                     <h4 style="margin: 0 0 10px 0; color: #1976d2;">Mode Selection:</h4>
                     <ul style="margin: 0; padding-left: 20px; color: #1976d2;">
-                        <li><strong>Quick Mode:</strong> Fast generation with 3 iterations - good for initial testing</li>
-                        <li><strong>Deep Think Mode:</strong> Comprehensive generation with 10 iterations - best quality results</li>
+                        <li><strong>Quick Mode:</strong> Fast generation in 5 minutes - good for initial testing</li>
+                        <li><strong>Deep Think Mode:</strong> Comprehensive generation in 20 minutes - best quality results</li>
                     </ul>
                 </div>
             </div>
@@ -429,6 +494,31 @@
     </div>
 
     <script>
+        // Function to convert scores to user-friendly words
+        function scoreToFriendlyWord(score) {
+            if (score >= 9.0) return 'Perfect';
+            if (score >= 7.5) return 'Good';
+            if (score >= 6.0) return 'Acceptable';
+            return 'Poor';
+        }
+
+        // Function to convert metric names to friendly descriptions
+        function metricToFriendlyName(metric) {
+            const friendlyNames = {
+                '3D Reconstruction Suitability': '3D Reconstruction Suitability',
+                'Angle Diversity': 'Angle Diversity',
+                'Background Cleanliness': 'Background Cleanliness',
+                'Grid Structure': 'Grid Structure',
+                'Image Quality': 'Image Quality',
+                'Object Consistency': 'Object Consistency',
+                'Overall Score': 'Overall Quality',
+                'Image Quality': 'Image Quality',
+                'Metadata Accuracy': 'Metadata Accuracy',
+                'Completeness': 'Completeness'
+            };
+            return friendlyNames[metric] || metric;
+        }
+
         let currentSessionId = null;
         let statusCheckInterval = null;
 
@@ -534,11 +624,6 @@
             const maxIterations = data.max_iterations || 3;
             
             if (data.status === 'running') {
-                let statusText = `Iteration ${currentIteration} in progress... (${currentIteration}/${maxIterations})`;
-                if (data.evaluation_status) {
-                    statusText += ` - ${data.evaluation_status}`;
-                }
-                progressText.textContent = statusText;
                 progressFill.style.width = `${Math.min((currentIteration / maxIterations) * 100, 100)}%`;
             } else if (data.status === 'completed') {
                 progressText.textContent = `Completed! Final score: ${data.final_score.toFixed(1)}/10`;
@@ -549,20 +634,20 @@
             }
 
             // Update iterations grid
-            updateIterationsGrid(iterations);
+            updateIterationsGrid(iterations, maxIterations);
         }
 
-        function updateIterationsGrid(iterations) {
+        function updateIterationsGrid(iterations, totalIterations) {
             const grid = document.getElementById('iterationsGrid');
             grid.innerHTML = '';
 
             iterations.forEach((iteration, index) => {
-                const card = createIterationCard(iteration, index + 1);
+                const card = createIterationCard(iteration, index + 1, totalIterations);
                 grid.appendChild(card);
             });
         }
 
-        function createIterationCard(iteration, iterationNumber) {
+        function createIterationCard(iteration, iterationNumber, totalIterations) {
             const card = document.createElement('div');
             card.className = 'iteration-card';
 
@@ -589,27 +674,17 @@
                     <div style="margin-top: 15px;">
                         <h5>Evaluation Results:</h5>
                         <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                            <strong>Scores:</strong>
                             <ul style="margin: 10px 0; padding-left: 20px;">
-                                ${Object.entries(evaluation.scores || {}).map(([key, value]) => 
-                                    `<li>${key}: ${value}/10</li>`
+                                ${Object.entries(evaluation.scores || {}).filter(([key, value]) => key !== 'overall').map(([key, value]) => 
+                                    `<li>${metricToFriendlyName(key)}: ${scoreToFriendlyWord(value)}</li>`
                                 ).join('')}
                             </ul>
                         </div>
                         
-                        ${issues.length > 0 ? `
-                            <div class="feedback-section">
-                                <h4>Issues Found:</h4>
-                                <ul>
-                                    ${issues.map(issue => `<li>${issue}</li>`).join('')}
-                                </ul>
-                            </div>
-                        ` : ''}
-                        
                         ${suggestions.length > 0 ? `
-                            <div class="suggestions">
-                                <h4>Suggestions for Improvement:</h4>
-                                <ul>
+                            <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-top: 15px;">
+                                <h6 style="margin: 0 0 10px 0; color: #1976d2;">💡 Suggestions for Improvement:</h6>
+                                <ul style="margin: 0; padding-left: 20px; color: #1976d2;">
                                     ${suggestions.map(suggestion => `<li>${suggestion}</li>`).join('')}
                                 </ul>
                             </div>
@@ -619,7 +694,6 @@
             }
 
             card.innerHTML = `
-                <h4>Iteration ${iterationNumber}</h4>
                 <div style="text-align: center; margin-bottom: 15px;">
                     <img src="/api/image/${currentSessionId}/${iterationNumber}" 
                          alt="Iteration ${iterationNumber}" 
