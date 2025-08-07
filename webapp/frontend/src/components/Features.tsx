@@ -56,17 +56,6 @@ export const Features: React.FC = () => {
             </div>
           ))}
         </div>
-
-        <div className="text-center mt-16">
-          <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-2xl p-8 max-w-4xl mx-auto">
-            <h3 className="text-2xl font-bold mb-4">
-              Together, these innovations enable Vicino to serve professional-grade workflows
-            </h3>
-            <p className="text-lg opacity-90">
-              With speed, reliability, and customization capabilities that current tools lack.
-            </p>
-          </div>
-        </div>
       </div>
     </section>
   );

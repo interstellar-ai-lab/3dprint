@@ -90,39 +90,6 @@ export const MarketSection: React.FC = () => {
           ))}
         </div>
 
-        {/* Market Opportunity */}
-        <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-3xl p-8 mb-20">
-          <h3 className="text-3xl font-bold text-gray-900 text-center mb-12">
-            Market Opportunity
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {marketData.map((data, index) => (
-              <div key={index} className="text-center">
-                <div className={`text-4xl font-bold ${data.color} mb-2`}>
-                  {data.value}
-                </div>
-                <div className="text-lg font-semibold text-gray-900 mb-2">
-                  {data.label}
-                </div>
-                <div className="text-gray-600">
-                  {data.description}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Business Model */}
-        <div className="text-center mb-12">
-          <h3 className="text-3xl font-bold text-gray-900 mb-6">
-            Business Model
-          </h3>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Hybrid SaaS model with subscription pricing and usage-based credit system 
-            for high-volume and enterprise accounts.
-          </p>
-        </div>
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
           {pricingTiers.map((tier, index) => (
             <div key={index} className="bg-white border-2 border-gray-200 rounded-2xl p-8 hover:border-purple-500 transition-all duration-300">

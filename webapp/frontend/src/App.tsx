@@ -4,7 +4,6 @@ import { Navigation } from './components/Navigation';
 import { Hero } from './components/Hero';
 import { Features } from './components/Features';
 import { MarketSection } from './components/MarketSection';
-import { TractionSection } from './components/TractionSection';
 import { TeamSection } from './components/TeamSection';
 import { DemoSection } from './components/DemoSection';
 import { Footer } from './components/Footer';
@@ -37,8 +36,7 @@ function App() {
           <MarketSection />
         </section>
         
-        {/* Traction Section */}
-        <TractionSection />
+
         
         {/* Team Section */}
         <section id="team">
