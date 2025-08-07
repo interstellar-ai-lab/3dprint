@@ -25,6 +25,8 @@ access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s"
 # Process naming
 proc_name = "multiview-generator"
 
+workers = 1  # Use only 1 worker for session sharing
+
 # Server mechanics
 daemon = False
 pidfile = "/tmp/gunicorn.pid"

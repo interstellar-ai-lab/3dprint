@@ -12,7 +12,7 @@ import { getSessionStatus } from '../api/generationApi';
 import { ImageGrid } from './ImageGrid';
 import { EvaluationResults } from './EvaluationResults';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8001';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://vicino.ai';
 
 export const StatusDisplay: React.FC = () => {
   const { currentSession, updateSession } = useGenerationStore();
