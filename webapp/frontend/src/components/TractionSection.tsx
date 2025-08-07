@@ -17,7 +17,7 @@ export const TractionSection: React.FC = () => {
     {
       icon: "💰",
       title: "Fundraising",
-      description: "Currently raising ~$2 million in pre-seed capital",
+      description: "Currently raising millions in pre-seed capital",
       status: "active"
     }
   ];

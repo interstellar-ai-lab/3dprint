@@ -21,7 +21,7 @@ export const TeamSection: React.FC = () => {
     {
       name: "Dr. Peter Lin",
       role: "CTO and Co-founder",
-      bio: "Peter previously served as an applied scientist at Microsoft, where he led projects such as AgenticRAG and GraphRAG in multi-agent LLM systems. He is the architect of Vicino's full technical stack, including its core multi-agent generation engine.",
+      bio: "Peter worked as an Applied Scientist at a leading big tech company, where he led projects such as AgenticRAG and GraphRAG in multi-agent LLM systems. He is also the chief architect of Vicino’s entire technical stack, including its core multi-agent generation engine.",
       education: "PhD in Computer Engineering from the University of British Columbia and was a research faculty member at NYU, contributing to DARPA projects in computer vision and multi-modal AI.",
       linkedin: "https://www.linkedin.com/in/jianzhe-peter-lin-a4135baa/",
       avatar: "👨‍💻"
@@ -29,8 +29,8 @@ export const TeamSection: React.FC = () => {
     {
       name: "Jackson Pan",
       role: "Founding Engineer and Co-founder",
-      bio: "Jackson is a systems engineer with deep experience in large-scale infrastructure. At Meta, he helped build and scale the Meta Business Suite to over 30 million monthly active users and over $100 million in ad revenue.",
-      education: "Currently works at AWS, where he maintains scalable ML infrastructure. His technical focus spans backend systems, DevOps, and full-stack product engineering.",
+      bio: "Jackson is a senior machine learning engineer at AWS AI with deep experience in large-scale ML infrastructure. When he was at Meta, he built Meta Business Suite from 0 to over 30 million monthly active users and over $100 million in ad revenue. ",
+      education: "Master in University of Illinois at Urbana-Champaign, Bachelor in Computer Science from Purdue University",
       linkedin: "https://www.linkedin.com/in/zeyupan1995/",
       avatar: "👨‍🔧"
     }
