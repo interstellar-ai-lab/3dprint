@@ -33,8 +33,9 @@ group = None
 tmp_upload_dir = None
 
 # SSL (if needed)
-# keyfile = None
-# certfile = None
+# SSL configuration
+keyfile = "/etc/letsencrypt/live/vicino.ai/privkey.pem"
+certfile = "/etc/letsencrypt/live/vicino.ai/cert.pem"
 
 # Preload app for better performance
 preload_app = True

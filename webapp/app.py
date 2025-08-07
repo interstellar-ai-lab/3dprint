@@ -39,9 +39,10 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app, resources={
     r"/api/*": {
-        "origins": ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:8000", "http://127.0.0.1:8000", "http://localhost:8001", "http://127.0.0.1:8001", "https://vicino.ai", "https://www.vicino.ai", "https://vicino.ai:8001"],
+        "origins": ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:8000", "http://127.0.0.1:8000", "http://localhost:8001", "http://127.0.0.1:8001", "https://vicino.ai", "https://www.vicino.ai", "https://vicino.ai:8001", "https://vicino.ai:443"],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"]
+        "allow_headers": ["Content-Type", "Authorization", "Accept", "Origin", "X-Requested-With", "Cache-Control", "Pragma"],
+        "supports_credentials": True
     }
 })
 
