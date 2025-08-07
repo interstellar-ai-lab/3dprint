@@ -21,7 +21,7 @@
     "postcss": "^8.4.0"
   },
   "scripts": {
-    "start": "DANGEROUSLY_DISABLE_HOST_CHECK HOST=0.0.0.0 PORT=8000 react-scripts start",
+    "start": "DANGEROUSLY_DISABLE_HOST_CHECK=true HOST=0.0.0.0 PORT=8000 react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
@@ -43,5 +43,5 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-  },
+  }
 }
