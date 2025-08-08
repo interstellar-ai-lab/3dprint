@@ -3,22 +3,22 @@ import React from 'react';
 export const Features: React.FC = () => {
   const features = [
     {
-      icon: "🔄",
-      title: "Stepwise Reconstruction",
-      description: "A two-step process (text-to-multiview image generation, image-to-3D reconstruction) enabling reliable and stable generation. The innovative use of multi-view images provides strong, classifier-free guidance, significantly enhancing the precision of 3D reconstruction.",
-      benefits: ["Reliable generation", "Stable outputs", "Enhanced precision", "Classifier-free guidance"]
+      icon: "🎯",
+      title: "Production-Ready Quality",
+      description: "Unlike basic 3D generation tools that require hours of manual cleanup, our system delivers export-ready assets with precise control over style and structure. Every output meets professional standards for immediate use in your projects.",
+      benefits: ["Zero manual cleanup required", "Professional-grade outputs", "Consistent quality", "Ready for production"]
     },
     {
       icon: "🤖",
-      title: "Agentic Architecture",
-      description: "Automatic iterative collaboration among agents to refine outputs at each step, ensuring reliability and accuracy of AI-driven 3D reconstruction. The scalability of a multi-agent system allows agents to be added or removed easily, making it adaptable across diverse vertical applications.",
-      benefits: ["Automatic refinement", "Scalable system", "Cross-vertical adaptability", "Reliable accuracy"]
+      title: "Intelligent AI Collaboration",
+      description: "Our advanced AI system works like having a team of expert 3D artists at your fingertips. Multiple AI agents collaborate to refine and perfect your assets, ensuring every detail meets your exact specifications.",
+      benefits: ["AI-powered refinement", "Expert-level results", "Automatic optimization", "Smart collaboration"]
     },
     {
-      icon: "👥",
-      title: "Human-in-the-Loop Control",
-      description: "An interactive multi-agent system enabling detailed customization through human-AI collaboration. Unlike one-click solutions, our conversational workflow allows users to iteratively refine requirements with precision and receive immediate feedback from multiple agents.",
-      benefits: ["Interactive customization", "Conversational workflow", "Immediate feedback", "Precision control"]
+      icon: "⚡",
+      title: "Real-Time Interactive Control",
+      description: "Take full control of your creative process with our conversational interface. Refine, adjust, and perfect your 3D assets through natural dialogue, getting instant feedback and making changes on the fly.",
+      benefits: ["Natural conversation interface", "Instant feedback", "Real-time adjustments", "Complete creative control"]
     }
   ];
 
@@ -27,11 +27,11 @@ export const Features: React.FC = () => {
       <div className="container mx-auto px-4">
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-            Three Revolutionary Innovations
+            Why Choose Vicino AI?
           </h2>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Vicino AI's architecture introduces breakthrough innovations that set us apart from 
-            traditional one-click 3D generation tools.
+            Experience the future of 3D asset creation with our revolutionary platform that combines 
+            cutting-edge AI with intuitive user control.
           </p>
         </div>
 
@@ -55,6 +55,18 @@ export const Features: React.FC = () => {
               </div>
             </div>
           ))}
+        </div>
+
+        <div className="text-center mt-16">
+          <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-2xl p-8 max-w-4xl mx-auto">
+            <h3 className="text-2xl font-bold mb-4">
+              Built for Creative Professionals
+            </h3>
+            <p className="text-lg opacity-90">
+              Join thousands of designers, developers, and creators who trust Vicino AI to deliver 
+              exceptional 3D assets that bring their visions to life.
+            </p>
+          </div>
         </div>
       </div>
     </section>
