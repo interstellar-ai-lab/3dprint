@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 
 export const Navigation: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -56,6 +57,14 @@ export const Navigation: React.FC = () => {
             >
               Demo
             </button>
+            <Link 
+              to="/studio"
+              className={`font-medium transition-colors ${
+                isScrolled ? 'text-gray-700 hover:text-purple-600' : 'text-white/90 hover:text-white'
+              }`}
+            >
+              Studio
+            </Link>
             <button 
               onClick={() => scrollToSection('market')}
               className={`font-medium transition-colors ${
@@ -116,6 +125,14 @@ export const Navigation: React.FC = () => {
               >
                 Demo
               </button>
+              <a 
+                href="http://localhost:8001/studio"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-700 hover:text-purple-600 font-medium text-left"
+              >
+                Studio
+              </a>
               <button 
                 onClick={() => scrollToSection('market')}
                 className="text-gray-700 hover:text-purple-600 font-medium text-left"

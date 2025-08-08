@@ -9,29 +9,19 @@ from tencentcloud.common.profile.http_profile import HttpProfile
 from tencentcloud.common.exception.tencent_cloud_sdk_exception import TencentCloudSDKException
 from tencentcloud.ai3d.v20250513 import ai3d_client, models
 
-# Import configuration
-try:
-    from tencent_config import (
-        TENCENTCLOUD_SECRET_ID, 
-        TENCENTCLOUD_SECRET_KEY, 
-        TENCENTCLOUD_REGION, 
-        TENCENTCLOUD_ENDPOINT,
-        TEST_IMAGE_URL,
-        TEST_PROMPT
-    )
-except ImportError:
-    print("Warning: tencent_config.py not found, using environment variables only")
-    TENCENTCLOUD_SECRET_ID = None
-    TENCENTCLOUD_SECRET_KEY = None
-    TENCENTCLOUD_REGION = "ap-guangzhou"
-    TENCENTCLOUD_ENDPOINT = "ai3d.tencentcloudapi.com"
-    TEST_IMAGE_URL = "https://i.postimg.cc/hj8HRmFk/1.jpg"
-    TEST_PROMPT = "一只可爱的小猫"
+# Load environment variables
+from dotenv import load_dotenv
+load_dotenv()
+
 
 def test_tencent_ai3d_api():
     """
     Test function for Tencent Cloud AI3D API
     """
+    TENCENTCLOUD_REGION = "ap-guangzhou"
+    TENCENTCLOUD_ENDPOINT = "ai3d.tencentcloudapi.com"
+    TEST_IMAGE_URL = "https://i.postimg.cc/hj8HRmFk/1.jpg"
+
     try:
         # Get credentials from environment variables or config file
         secret_id = os.getenv("TENCENTCLOUD_SECRET_ID")
@@ -89,10 +79,13 @@ def test_with_prompt():
     """
     Test function using text prompt instead of image URL
     """
+    TENCENTCLOUD_REGION = "ap-guangzhou"
+    TENCENTCLOUD_ENDPOINT = "ai3d.tencentcloudapi.com"
+    TEST_PROMPT = "一只可爱的小猫"
     try:
         # Get credentials from environment variables or config file
-        secret_id = os.getenv("TENCENTCLOUD_SECRET_ID") or TENCENTCLOUD_SECRET_ID
-        secret_key = os.getenv("TENCENTCLOUD_SECRET_KEY") or TENCENTCLOUD_SECRET_KEY
+        secret_id = os.getenv("TENCENTCLOUD_SECRET_ID")
+        secret_key = os.getenv("TENCENTCLOUD_SECRET_KEY")
         
         if not secret_id or not secret_key:
             print("Error: TENCENTCLOUD_SECRET_ID and TENCENTCLOUD_SECRET_KEY must be set as environment variables or in tencent_config.py")
@@ -133,10 +126,12 @@ def check_job_status(job_id):
     """
     Check the status of a submitted job
     """
+    TENCENTCLOUD_REGION = "ap-guangzhou"
+    TENCENTCLOUD_ENDPOINT = "ai3d.tencentcloudapi.com"
     try:
         # Get credentials from environment variables or config file
-        secret_id = os.getenv("TENCENTCLOUD_SECRET_ID") or TENCENTCLOUD_SECRET_ID
-        secret_key = os.getenv("TENCENTCLOUD_SECRET_KEY") or TENCENTCLOUD_SECRET_KEY
+        secret_id = os.getenv("TENCENTCLOUD_SECRET_ID")
+        secret_key = os.getenv("TENCENTCLOUD_SECRET_KEY")
         
         if not secret_id or not secret_key:
             print("Error: TENCENTCLOUD_SECRET_ID and TENCENTCLOUD_SECRET_KEY must be set as environment variables or in tencent_config.py")

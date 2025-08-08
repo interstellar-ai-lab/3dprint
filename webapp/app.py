@@ -3,27 +3,38 @@
 Multi agent to generate 3D images - Flask Web App for EC2 Deployment
 """
 
-from flask import Flask, request, jsonify, render_template, send_file, Response
+from flask import Flask, request, jsonify, render_template, send_file
 from flask_cors import CORS
 import json
 import os
 import sys
 import uuid
 import pathlib
-import asyncio
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 import base64
 from PIL import Image
 import io
 from openai import OpenAI, AsyncOpenAI
-import aiohttp
 import threading
 import logging
+
+# GCP Storage imports
+try:
+    from google.cloud import storage
+    from google.oauth2 import credentials as user_credentials
+    from google.oauth2 import service_account
+    GCP_AVAILABLE = True
+except ImportError:
+    logger.warning("Google Cloud Storage library not installed. Install with: pip install google-cloud-storage")
+    GCP_AVAILABLE = False
 
 # Load environment variables
 from dotenv import load_dotenv
 load_dotenv()
+
+# Import studio module
+from studio_module import studio_bp, init_studio_module
 
 # Configure logging
 logging.basicConfig(
@@ -36,7 +47,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
+
+# Register studio blueprint
+app.register_blueprint(studio_bp)
+
 CORS(app, resources={
     r"/api/*": {
         "origins": ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:8000", "http://127.0.0.1:8000", "http://localhost:8001", "http://127.0.0.1:8001", "https://vicino.ai", "https://www.vicino.ai", "https://vicino.ai:8001", "https://vicino.ai:443", "http://vicino.ai", "http://www.vicino.ai", "http://vicino.ai:8001"],
@@ -57,44 +72,88 @@ if not OPENAI_API_KEY:
 openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 openai_sync_client = OpenAI(api_key=OPENAI_API_KEY)
 
-async def download_image_to_pil(image_url: str) -> Optional[Image.Image]:
-    """Download image from URL and convert to PIL Image"""
-    try:
-        # Handle HTTP URL
-        async with aiohttp.ClientSession() as session:
-            async with session.get(image_url) as response:
-                if response.status == 200:
-                    image_data = await response.read()
-                    return Image.open(io.BytesIO(image_data))
-                else:
-                    logger.error(f"Failed to download image from {image_url}: {response.status}")
-                    return None
-    except Exception as e:
-        logger.error(f"Error loading image from {image_url}: {e}")
-        return None
+# GCP Storage configuration
+GCP_BUCKET_NAME = "vicino.ai"
+GCP_PROJECT_ID = "fabled-pivot-468319-q2"  # Your GCP project ID
+GCP_CREDENTIALS_PATH = "/Users/Interstellar/.config/gcloud/application_default_credentials.json"
+gcp_storage_client = None
 
-def download_image_to_pil_sync(image_url: str) -> Optional[Image.Image]:
-    """Download image from URL or load from file and convert to PIL Image (synchronous version)"""
+def initialize_gcp_storage():
+    """Initialize GCP Storage client"""
+    global gcp_storage_client
+    
+    if not GCP_AVAILABLE:
+        logger.warning("GCP Storage not available - skipping GCS uploads")
+        return False
+    
     try:
-        if image_url.startswith("file://"):
-            # Handle local file
-            file_path = image_url.replace("file://", "")
-            return Image.open(file_path)
-        else:
-            # Handle HTTP URL
-            import requests
-            response = requests.get(image_url, timeout=30)
-            if response.status_code == 200:
-                return Image.open(io.BytesIO(response.content))
+        if os.path.exists(GCP_CREDENTIALS_PATH):
+            # Load credentials from the default credentials file
+            with open(GCP_CREDENTIALS_PATH, 'r') as f:
+                cred_data = json.load(f)
+            
+            if 'type' in cred_data and cred_data['type'] == 'service_account':
+                # Service account JSON file
+                credentials = service_account.Credentials.from_service_account_file(GCP_CREDENTIALS_PATH)
             else:
-                logger.error(f"Failed to download image from {image_url}: {response.status_code}")
-                return None
+                # Default credentials file (user credentials)
+                credentials = user_credentials.Credentials.from_authorized_user_file(GCP_CREDENTIALS_PATH)
+            
+            # Initialize client with project ID
+            gcp_storage_client = storage.Client(project=GCP_PROJECT_ID, credentials=credentials)
+            logger.info(f"✅ GCP Storage client initialized successfully for project: {GCP_PROJECT_ID}")
+            return True
+        else:
+            logger.warning(f"GCP credentials file not found: {GCP_CREDENTIALS_PATH}")
+            return False
     except Exception as e:
-        logger.error(f"Error loading image from {image_url}: {e}")
+        logger.error(f"❌ Failed to initialize GCP Storage client: {e}")
+        return False
+
+def upload_to_gcs(local_file_path: str, gcs_path: str) -> Optional[str]:
+    """Upload a file to Google Cloud Storage"""
+    if not gcp_storage_client:
+        logger.warning("GCP Storage client not initialized - skipping upload")
+        return None
+    
+    try:
+        # Remove file:// prefix if present
+        clean_local_path = local_file_path.replace("file://", "")
+        
+        if not os.path.exists(clean_local_path):
+            logger.error(f"Local file does not exist: {clean_local_path}")
+            return None
+        
+        bucket = gcp_storage_client.bucket(GCP_BUCKET_NAME)
+        blob = bucket.blob(gcs_path)
+        
+        # Upload the file
+        blob.upload_from_filename(clean_local_path)
+        
+        # Note: Don't call make_public() for uniform bucket-level access
+        # The bucket should be configured to allow public read access
+        
+        # Return the public HTTPS URL (assuming bucket is configured for public access)
+        gcs_url = f"https://storage.googleapis.com/{GCP_BUCKET_NAME}/{gcs_path}"
+        logger.info(f"✅ File uploaded to GCS: {gcs_url}")
+        return gcs_url
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to upload file to GCS: {e}")
         return None
 
-def generate_multiview_with_gpt_image1(target_object: str, iteration: int = 1, previous_feedback: List[str] = None, previous_image_url: str = None) -> str:
-    """Generate 2x2 multiview image using GPT-Image-1 with image-to-image capability"""
+def load_png_image(image_path: str) -> Optional[Image.Image]:
+    """Load PNG image from local file path"""
+    try:
+        # All paths start with file://, so just remove the prefix
+        file_path = image_path.replace("file://", "")
+        return Image.open(file_path)
+    except Exception as e:
+        logger.error(f"Error loading PNG image from {image_path}: {e}")
+        return None
+
+def generate_multiview_with_gpt_image1(target_object: str, iteration: int = 1, previous_feedback: List[str] = None, previous_image_path: str = None) -> str:
+    """Generate 2x2 multiview image using GPT-Image-1 with image-to-image capability. Returns local file path."""
     
     # Create the generation instructions
     instructions = f"""Your task is to generate a 2x2 grid with 4 specific views of the same object for 3D reconstruction: {target_object}. 
@@ -132,10 +191,10 @@ OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION. FAILURE TO
     
     try:
         # Debug logging
-        logger.info(f"🔍 Debug: iteration={iteration}, previous_image_url={'None' if previous_image_url is None else 'exists'}")
+        logger.info(f"🔍 Debug: iteration={iteration}, previous_image_path={'None' if previous_image_path is None else 'exists'}")
         
         # For first iteration - text to image
-        if iteration == 1 or not previous_image_url:
+        if iteration == 1 or not previous_image_path:
             logger.info(f"🎨 Generating initial image for '{target_object}' (iteration {iteration})...")
             response = openai_sync_client.images.generate(
                 model="gpt-image-1",
@@ -146,8 +205,8 @@ OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION. FAILURE TO
             # For subsequent iterations - image edit with feedback
             logger.info(f"🎨 Editing previous image with feedback for '{target_object}' (iteration {iteration})...")
             
-            # Download previous image
-            previous_image = download_image_to_pil_sync(previous_image_url)
+            # Load previous PNG image
+            previous_image = load_png_image(previous_image_path)
             if not previous_image:
                 logger.warning(f"⚠️  Could not load previous image for iteration {iteration}, using text-to-image generation instead")
                 response = openai_sync_client.images.generate(
@@ -203,12 +262,9 @@ OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION."""
                     )
         
         if hasattr(response, 'data') and response.data:
-            # Check if it's a URL or base64 data
+            # Handle base64 data from gpt-image-1
             first_item = response.data[0]
-            if hasattr(first_item, 'url') and first_item.url:
-                image_url = first_item.url
-                return image_url
-            elif hasattr(first_item, 'b64_json') and first_item.b64_json:
+            if hasattr(first_item, 'b64_json') and first_item.b64_json:
                 # Handle base64 data - save to PNG file
                 try:
                     # Decode base64 data
@@ -220,12 +276,13 @@ OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION."""
                     temp_file.write(image_data)
                     temp_file.close()
                     
-                    return f"file://{temp_file.name}"
+                    local_image_path = f"file://{temp_file.name}"
+                    return local_image_path
                 except Exception as e:
                     logger.error(f"❌ Error handling base64 data: {e}")
                     return None
             else:
-                logger.error(f"❌ Unexpected response format")
+                logger.error(f"❌ No base64 data in response")
                 return None
         else:
             logger.error(f"❌ No image data in response")
@@ -235,7 +292,7 @@ OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION."""
         logger.error(f"❌ Error generating with GPT-4 Vision: {e}")
         return None
 
-def evaluate_image_with_gpt4v(image_url: str, target_object: str, iteration: int) -> Dict:
+def evaluate_image_with_gpt4v(local_image_path: str, target_object: str, iteration: int) -> Dict:
     """Evaluate generated image using GPT-4 Vision"""
     
     evaluation_prompt = f"""Analyze this 2x2 multiview grid image of a {target_object} for 3D reconstruction suitability.
@@ -287,22 +344,15 @@ def evaluate_image_with_gpt4v(image_url: str, target_object: str, iteration: int
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            # Handle both URLs and data URLs
-            if image_url.startswith("data:image/"):
-                # Handle data URL directly
-                # Extract base64 data from data URL
-                header, encoded = image_url.split(",", 1)
-                base64_image = encoded
-            else:
-                # Download and encode the image
-                image = download_image_to_pil_sync(image_url)
-                if not image:
-                    raise Exception("Failed to download image")
-                
-                # Convert to base64
-                buffer = io.BytesIO()
-                image.save(buffer, format='PNG')
-                base64_image = base64.b64encode(buffer.getvalue()).decode('utf-8')
+            # Load PNG image and convert to base64
+            image = load_png_image(local_image_path)
+            if not image:
+                raise Exception("Failed to load PNG image")
+            
+            # Convert to base64
+            buffer = io.BytesIO()
+            image.save(buffer, format='PNG')
+            base64_image = base64.b64encode(buffer.getvalue()).decode('utf-8')
             
             # Call GPT-4 Vision API
             response = openai_sync_client.chat.completions.create(
@@ -507,10 +557,19 @@ def meets_quality_threshold(scores: Dict) -> bool:
         all(score >= 7.0 for score in all_scores)  # Reasonable bar across all metrics
     )
 
-def save_metadata(session_id: str, iteration: int, target_object: str, image_url: str, evaluation_results: Dict, mode: str = "quick") -> str:
-    """Save metadata for this iteration"""
+def save_metadata(session_id: str, iteration: int, target_object: str, local_image_path: str, evaluation_results: Dict, mode: str = "quick") -> str:
+    """Save metadata for this iteration and upload image to GCS"""
     session_dir = pathlib.Path(f"generated_images/session_{session_id}")
     session_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Generate GCS path for the image
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    gcs_image_path = f"generated_images/session_{session_id}/iteration_{iteration:02d}_{timestamp}.png"
+    
+    # Upload image to GCS
+    gcs_url = upload_to_gcs(local_image_path, gcs_image_path)
+    # Construct gsutil URI (requested naming)
+    gsutil_uri = f"gs://{GCP_BUCKET_NAME}/{gcs_image_path}"
     
     metadata_file = session_dir / f"metadata_iteration_{iteration:02d}.json"
     metadata_data = {
@@ -518,7 +577,14 @@ def save_metadata(session_id: str, iteration: int, target_object: str, image_url
         "iteration": iteration,
         "timestamp": datetime.now().isoformat(),
         "target_object": target_object,
-        "image_url": image_url,
+        "local_image_path": local_image_path,
+        # Canonical object path (kept for internal use and backwards compatibility)
+        "gcs_image_path": gcs_image_path,
+        # Legacy public URL field (kept for backwards compatibility)
+        "gcs_url": gcs_url,
+        # New names requested
+        "public_url": gcs_url,
+        "gsutil_uri": gsutil_uri,
         "evaluation_results": evaluation_results,
         "generation_model": "gpt-image-1",
         "evaluation_model": "gpt-4o",
@@ -535,7 +601,7 @@ def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: s
     
     session_id = session_id
     previous_feedback = []
-    previous_image_url = None
+    previous_image_path = None
     all_results = []
     iteration = 0
     
@@ -575,9 +641,9 @@ def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: s
         active_sessions[session_id]["current_iteration"] = iteration
         
         # Generate image with GPT-Image-1 (image-to-image for iterations > 1)
-        image_url = generate_multiview_with_gpt_image1(target_object, iteration, previous_feedback, previous_image_url)
+        local_image_path = generate_multiview_with_gpt_image1(target_object, iteration, previous_feedback, previous_image_path)
         
-        if not image_url:
+        if not local_image_path:
             active_sessions[session_id]["status"] = "failed"
             active_sessions[session_id]["error"] = "Failed to generate image"
             break
@@ -585,7 +651,7 @@ def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: s
         # IMMEDIATELY add the image to session (before evaluation)
         iteration_result = {
             "iteration": iteration,
-            "image_url": image_url,
+            "local_image_path": local_image_path,
             "evaluation": None,  # Will be updated after evaluation
             "metadata_file": None,  # Will be updated after evaluation
             "evaluation_status": "evaluating"  # Show evaluation progress
@@ -599,10 +665,10 @@ def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: s
         active_sessions[session_id]["evaluation_status"] = f"Evaluating..."
         
         # Evaluate image with GPT-4 Vision
-        evaluation_results = evaluate_image_with_gpt4v(image_url, target_object, iteration)
+        evaluation_results = evaluate_image_with_gpt4v(local_image_path, target_object, iteration)
         
         # Save metadata
-        metadata_file = save_metadata(session_id, iteration, target_object, image_url, evaluation_results, mode)
+        metadata_file = save_metadata(session_id, iteration, target_object, local_image_path, evaluation_results, mode)
         
         # Update the existing iteration_result with evaluation data
         active_sessions[session_id]["iterations"][-1]["evaluation"] = evaluation_results
@@ -620,16 +686,16 @@ def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: s
             active_sessions[session_id]["message"] = f"Quality threshold met in {mode_display} - generation completed"
             break
         
-        # Store current image URL for next iteration
-        previous_image_url = image_url
+        # Store current image path for next iteration
+        previous_image_path = local_image_path
         
-        # Print image URL info without cluttering the console
-        if image_url.startswith('data:image/'):
+        # Print image path info without cluttering the console
+        if local_image_path.startswith('data:image/'):
             logger.info(f"📸 Stored base64 image for iteration {iteration}")
-        elif image_url.startswith('http'):
-            logger.info(f"📸 Stored remote image URL for iteration {iteration}: {image_url[:50]}...")
+        elif local_image_path.startswith('http'):
+            logger.info(f"📸 Stored remote image URL for iteration {iteration}: {local_image_path[:50]}...")
         else:
-            logger.info(f"📸 Stored image for iteration {iteration}")
+            logger.info(f"📸 Stored local image for iteration {iteration}")
         
         # Prepare feedback for next iteration
         previous_feedback = evaluation_results.get("suggestions", [])
@@ -660,6 +726,31 @@ def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: s
 def home():
     """Main page with input form"""
     return render_template('index.html')
+
+
+
+@app.route('/models/<path:filename>')
+def serve_model(filename):
+    """Serve 3D model files"""
+    model_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'downloads', '3d_model_test')
+    file_path = os.path.join(model_dir, filename)
+    
+    if not os.path.exists(file_path):
+        return jsonify({"error": "File not found"}), 404
+    
+    # Set appropriate MIME types
+    mime_types = {
+        '.obj': 'text/plain',
+        '.mtl': 'text/plain',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg'
+    }
+    
+    file_ext = os.path.splitext(filename)[1].lower()
+    mime_type = mime_types.get(file_ext, 'application/octet-stream')
+    
+    return send_file(file_path, mimetype=mime_type)
 
 @app.route('/api/generate', methods=['POST'])
 def generate():
@@ -711,6 +802,23 @@ def get_status(session_id):
         
         session = active_sessions[session_id]
         
+        # Add GCS URLs to iterations if available
+        iterations_with_gcs = []
+        for iteration_data in session["iterations"]:
+            iteration_with_gcs = iteration_data.copy()
+            
+            # Try to get GCS URL from metadata
+            if "metadata_file" in iteration_data and iteration_data["metadata_file"]:
+                try:
+                    with open(iteration_data["metadata_file"], 'r') as f:
+                        metadata = json.load(f)
+                        iteration_with_gcs["gcs_url"] = metadata.get("gcs_url")
+                        iteration_with_gcs["gcs_image_path"] = metadata.get("gcs_image_path")
+                except Exception as e:
+                    logger.warning(f"Could not read metadata file for iteration: {e}")
+            
+            iterations_with_gcs.append(iteration_with_gcs)
+        
         return jsonify({
             "session_id": session_id,
             "status": session["status"],
@@ -718,7 +826,7 @@ def get_status(session_id):
             "mode": session["mode"],
             "max_iterations": session["max_iterations"],
             "current_iteration": session["current_iteration"],
-            "iterations": session["iterations"],
+            "iterations": iterations_with_gcs,
             "final_score": session["final_score"],
             "error": session.get("error", None),
             "evaluation_status": session.get("evaluation_status", None)
@@ -728,91 +836,31 @@ def get_status(session_id):
         logger.error(f"Error getting status for session {session_id}: {e}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/image/<session_id>/<int:iteration>')
-def get_iteration_image(session_id, iteration):
-    """Get image for a specific iteration"""
-    try:
-        if session_id not in active_sessions:
-            return jsonify({"error": "Session not found"}), 404
-        
-        session = active_sessions[session_id]
-        if iteration > len(session["iterations"]):
-            return jsonify({"error": "Iteration not found"}), 404
-        
-        iteration_data = session["iterations"][iteration - 1]
-        image_url = iteration_data["image_url"]
-        
-        # Handle file URLs
-        if image_url.startswith('file://'):
-            file_path = image_url.replace('file://', '')
-            return send_file(file_path, mimetype='image/png')
-        
-        # Handle base64 data URLs
-        elif image_url.startswith('data:image/'):
-            # Extract the base64 data
-            header, encoded = image_url.split(",", 1)
-            image_data = base64.b64decode(encoded)
-            
-            # Determine content type from the data URL
-            content_type = header.split(":")[1].split(";")[0]
-            
-            # Return the image data directly
-            return Response(image_data, mimetype=content_type)
-        
-        # Handle OpenAI URLs - download and serve the image
-        elif image_url.startswith('http'):
-            # Use requests to download the image
-            try:
-                import requests
-                response = requests.get(image_url, timeout=30)
-                if response.status_code == 200:
-                    # Determine content type from response headers or URL
-                    content_type = response.headers.get('content-type', 'image/png')
-                    return Response(response.content, mimetype=content_type)
-                else:
-                    return jsonify({"error": "Failed to fetch image from URL"}), 500
-            except Exception as e:
-                logger.error(f"Failed to download image: {e}")
-                return jsonify({"error": f"Failed to download image: {str(e)}"}), 500
-        
-        else:
-            return jsonify({"error": "Invalid image URL format"}), 400
-            
-    except Exception as e:
-        logger.error(f"Error serving image for session {session_id}, iteration {iteration}: {e}")
-        return jsonify({"error": str(e)}), 500
 
-@app.route('/api/sessions')
-def list_sessions():
-    """List all active sessions"""
-    try:
-        sessions = []
-        for session_id, session_data in active_sessions.items():
-            sessions.append({
-                "session_id": session_id,
-                "status": session_data["status"],
-                "target_object": session_data["target_object"],
-                "mode": session_data["mode"],
-                "max_iterations": session_data["max_iterations"],
-                "current_iteration": session_data["current_iteration"],
-                "final_score": session_data["final_score"]
-            })
-        
-        return jsonify({"sessions": sessions})
-        
-    except Exception as e:
-        logger.error(f"Error listing sessions: {e}")
-        return jsonify({"error": str(e)}), 500
+
+
 
 @app.route('/api/health')
 def health():
     """Health check endpoint"""
     return jsonify({
-        "status": "healthy", 
+        "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "active_sessions": len(active_sessions)
     })
 
 if __name__ == '__main__':
+    # Initialize GCP Storage
+    logger.info("🔧 Initializing GCP Storage...")
+    gcp_initialized = initialize_gcp_storage()
+    if gcp_initialized:
+        logger.info("✅ GCP Storage initialized successfully")
+    else:
+        logger.warning("⚠️  GCP Storage initialization failed - uploads will be skipped")
+    
+    # Initialize studio module with GCP client
+    init_studio_module(gcp_storage_client, GCP_BUCKET_NAME)
+    logger.info("✅ Studio module initialized")
+    
     # For production deployment on EC2
     app.run(debug=False, host='0.0.0.0', port=8001) 
