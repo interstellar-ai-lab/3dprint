@@ -73,7 +73,10 @@ export const Navigation: React.FC = () => {
               Team
             </button>
             <button 
-              onClick={() => window.open('http://localhost:8000/studio', '_blank')}
+              onClick={() => {
+                const baseUrl = process.env.REACT_APP_BASE_URL || window.location.origin;
+                window.open(`${baseUrl}/studio`, '_blank');
+              }}
               className={`font-medium transition-colors ${
                 isScrolled ? 'text-gray-700 hover:text-purple-600' : 'text-white/90 hover:text-white'
               }`}
@@ -137,7 +140,10 @@ export const Navigation: React.FC = () => {
                 Team
               </button>
               <button 
-                onClick={() => window.open('http://localhost:8000/studio', '_blank')}
+                onClick={() => {
+                  const baseUrl = process.env.REACT_APP_BASE_URL || window.location.origin;
+                  window.open(`${baseUrl}/studio`, '_blank');
+                }}
                 className="text-gray-700 hover:text-purple-600 font-medium text-left"
               >
                 Studio

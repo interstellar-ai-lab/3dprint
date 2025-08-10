@@ -45,7 +45,7 @@ export const Studio: React.FC = () => {
   } | null>(null);
 
   // API base URL - adjust this according to your backend setup
-  const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:8001';
+  const API_BASE = process.env.REACT_APP_API_URL || 'https://vicino.ai';
 
   const fetchImages = async (search: string = '') => {
     try {
@@ -131,7 +131,8 @@ export const Studio: React.FC = () => {
       window.close();
     } else {
       // Otherwise navigate back to home
-      window.location.href = 'http://localhost:8000';
+      const baseUrl = process.env.REACT_APP_BASE_URL || window.location.origin;
+      window.location.href = baseUrl;
     }
   };
 

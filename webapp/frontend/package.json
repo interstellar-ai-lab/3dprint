@@ -5,7 +5,6 @@
   "dependencies": {
     "@headlessui/react": "^1.7.0",
     "@heroicons/react": "^2.0.0",
-    "@react-three/drei": "^10.6.1",
     "@types/jszip": "^3.4.1",
     "@types/node": "^16.18.0",
     "@types/react": "^18.2.0",

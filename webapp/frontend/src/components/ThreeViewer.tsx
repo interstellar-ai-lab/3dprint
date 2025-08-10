@@ -166,8 +166,9 @@ export const ThreeViewer: React.FC<ThreeViewerProps> = ({ zipUrl, isOpen, onClos
       console.log('Loading model from:', zipUrl);
 
       // Step 1: Use proxy endpoint to fetch the zip file (bypasses CORS)
+      const apiBase = process.env.REACT_APP_API_URL || 'https://vicino.ai';
       const proxyUrl = imagePath 
-        ? `http://localhost:8001/api/studio/proxy-zip/${imagePath}`
+        ? `${apiBase}/api/studio/proxy-zip/${imagePath}`
         : zipUrl;
       
       console.log('Using proxy URL:', proxyUrl);
