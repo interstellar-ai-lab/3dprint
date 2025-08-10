@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ThreeViewer } from './ThreeViewer';
+import { OrderModal } from './OrderModal';
 
 interface StudioImage {
   name: string;
@@ -32,6 +33,7 @@ export const Studio: React.FC = () => {
   const [selectedImage, setSelectedImage] = useState<StudioImage | null>(null);
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [selected3DModel, setSelected3DModel] = useState<StudioImage | null>(null);
+  const [orderModalOpen, setOrderModalOpen] = useState(false);
   
   // Material settings state
   const [materialData, setMaterialData] = useState<{
@@ -123,6 +125,13 @@ export const Studio: React.FC = () => {
       event.stopPropagation(); // Prevent triggering the image modal
     }
     setSelected3DModel(image);
+  };
+
+  const handleOrderClick = (event?: React.MouseEvent) => {
+    if (event) {
+      event.stopPropagation();
+    }
+    setOrderModalOpen(true);
   };
 
   const handleBackClick = () => {
@@ -298,19 +307,27 @@ export const Studio: React.FC = () => {
                           <p className="text-white/40 text-xs">{formatDate(image.updated)}</p>
                         </div>
                         {image.has_3d_model && image.zipurl && (
-                          <button
-                            onClick={(e) => handle3DViewClick(image, e)}
-                            className={`mt-2 px-3 py-1 text-xs rounded-md transition-all flex items-center ${
-                              selected3DModel?.name === image.name 
-                                ? 'bg-purple-500 text-white shadow-lg' 
-                                : 'bg-white/10 text-white/80 hover:bg-white/20'
-                            }`}
-                          >
-                            <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            {selected3DModel?.name === image.name ? 'Viewing' : 'View 3D'}
-                          </button>
+                          <div className="mt-2 flex gap-2">
+                            <button
+                              onClick={(e) => handle3DViewClick(image, e)}
+                              className={`px-3 py-1 text-xs rounded-md transition-all flex items-center flex-1 ${
+                                selected3DModel?.name === image.name 
+                                  ? 'bg-purple-500 text-white shadow-lg' 
+                                  : 'bg-white/10 text-white/80 hover:bg-white/20'
+                              }`}
+                            >
+                              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              {selected3DModel?.name === image.name ? 'Viewing' : 'View 3D'}
+                            </button>
+                            <div className="flex items-center px-2 py-1 bg-green-500/20 text-green-400 rounded-md text-xs">
+                              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                              </svg>
+                              Printable
+                            </div>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -520,6 +537,17 @@ export const Studio: React.FC = () => {
 
               {/* Actions */}
               <div className="space-y-3">
+                {/* Order 3D Print Button */}
+                <button
+                  onClick={handleOrderClick}
+                  className="flex items-center justify-center w-full px-4 py-3 bg-gradient-to-r from-green-500 to-green-700 text-white rounded-lg hover:from-green-600 hover:to-green-800 transition-all font-medium shadow-lg"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                  </svg>
+                  Order 3D Print
+                </button>
+
                 <a
                   href={selected3DModel.public_url}
                   target="_blank"
@@ -633,6 +661,15 @@ export const Studio: React.FC = () => {
         </div>
       )}
 
+      {/* Order Modal */}
+      {orderModalOpen && selected3DModel && (
+        <OrderModal
+          isOpen={orderModalOpen}
+          onClose={() => setOrderModalOpen(false)}
+          modelName={selected3DModel.filename}
+          modelImage={selected3DModel.public_url}
+        />
+      )}
 
     </div>
   );
