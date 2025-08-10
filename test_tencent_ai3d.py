@@ -9,24 +9,19 @@ from tencentcloud.common.profile.http_profile import HttpProfile
 from tencentcloud.common.exception.tencent_cloud_sdk_exception import TencentCloudSDKException
 from tencentcloud.ai3d.v20250513 import ai3d_client, models
 
-# Import configuration
-try:
-    from tencent_config import (
-        TENCENTCLOUD_SECRET_ID, 
-        TENCENTCLOUD_SECRET_KEY, 
-        TENCENTCLOUD_REGION, 
-        TENCENTCLOUD_ENDPOINT,
-        TEST_IMAGE_URL,
-        TEST_PROMPT
-    )
-except ImportError:
-    print("Warning: tencent_config.py not found, using environment variables only")
-    TENCENTCLOUD_SECRET_ID = None
-    TENCENTCLOUD_SECRET_KEY = None
-    TENCENTCLOUD_REGION = "ap-guangzhou"
-    TENCENTCLOUD_ENDPOINT = "ai3d.tencentcloudapi.com"
-    TEST_IMAGE_URL = "https://i.postimg.cc/hj8HRmFk/1.jpg"
-    TEST_PROMPT = "一只可爱的小猫"
+from dotenv import load_dotenv
+load_dotenv('.env')
+
+TENCENTCLOUD_REGION = "ap-guangzhou"
+TENCENTCLOUD_ENDPOINT = "ai3d.tencentcloudapi.com"
+TEST_IMAGE_URL = "https://i.postimg.cc/hj8HRmFk/1.jpg"
+TEST_PROMPT = "一只可爱的小猫"
+
+# Multiview image URLs
+MULTIVIEW_MAIN_IMAGE = "https://i.postimg.cc/7YxyLVwt/Screenshot-2025-08-09-at-20-22-51.png"
+MULTIVIEW_LEFT_IMAGE = "https://i.postimg.cc/xCrwVG6R/Screenshot-2025-08-09-at-20-24-40.png"
+MULTIVIEW_RIGHT_IMAGE = "https://i.postimg.cc/nrpNCFb9/Screenshot-2025-08-09-at-20-25-03.png"
+MULTIVIEW_BACK_IMAGE = "https://i.postimg.cc/4N4rGxQr/Screenshot-2025-08-09-at-20-25-44.png"
 
 def test_tencent_ai3d_api():
     """
@@ -91,8 +86,8 @@ def test_with_prompt():
     """
     try:
         # Get credentials from environment variables or config file
-        secret_id = os.getenv("TENCENTCLOUD_SECRET_ID") or TENCENTCLOUD_SECRET_ID
-        secret_key = os.getenv("TENCENTCLOUD_SECRET_KEY") or TENCENTCLOUD_SECRET_KEY
+        secret_id = os.getenv("TENCENTCLOUD_SECRET_ID")
+        secret_key = os.getenv("TENCENTCLOUD_SECRET_KEY")
         
         if not secret_id or not secret_key:
             print("Error: TENCENTCLOUD_SECRET_ID and TENCENTCLOUD_SECRET_KEY must be set as environment variables or in tencent_config.py")
@@ -129,14 +124,76 @@ def test_with_prompt():
         print(f"General Exception: {e}")
         return None
 
+def test_multiview_api():
+    """
+    Test function for Tencent Cloud AI3D Multiview API
+    Uses multiple images from different angles to generate 3D model
+    """
+    try:
+        # Get credentials from environment variables or config file
+        secret_id = os.getenv("TENCENTCLOUD_SECRET_ID")
+        secret_key = os.getenv("TENCENTCLOUD_SECRET_KEY")
+        
+        if not secret_id or not secret_key:
+            print("Error: TENCENTCLOUD_SECRET_ID and TENCENTCLOUD_SECRET_KEY must be set as environment variables or in tencent_config.py")
+            return None
+        
+        cred = credential.Credential(secret_id, secret_key)
+        
+        httpProfile = HttpProfile()
+        httpProfile.endpoint = TENCENTCLOUD_ENDPOINT
+
+        clientProfile = ClientProfile()
+        clientProfile.httpProfile = httpProfile
+        
+        client = ai3d_client.Ai3dClient(cred, TENCENTCLOUD_REGION, clientProfile)
+
+        req = models.SubmitHunyuanTo3DJobRequest()
+        
+        # Multiview parameters according to API documentation
+        # Using MultiViewImages.N array format
+        params = {
+            "ImageUrl": MULTIVIEW_MAIN_IMAGE,
+            "MultiViewImages": [
+                {
+                    "ViewType": "left",
+                    "ViewImageUrl": MULTIVIEW_LEFT_IMAGE
+                },
+                {
+                    "ViewType": "right", 
+                    "ViewImageUrl": MULTIVIEW_RIGHT_IMAGE
+                },
+                {
+                    "ViewType": "back",
+                    "ViewImageUrl": MULTIVIEW_BACK_IMAGE
+                }
+            ],
+            "ResultFormat": "OBJ"  # Specify output format
+        }
+        req.from_json_string(json.dumps(params))
+
+        resp = client.SubmitHunyuanTo3DJob(req)
+        
+        print("Multiview API Response:")
+        print(resp.to_json_string())
+        
+        return resp
+
+    except TencentCloudSDKException as err:
+        print(f"Tencent Cloud SDK Exception: {err}")
+        return None
+    except Exception as e:
+        print(f"General Exception: {e}")
+        return None
+
 def check_job_status(job_id):
     """
     Check the status of a submitted job
     """
     try:
         # Get credentials from environment variables or config file
-        secret_id = os.getenv("TENCENTCLOUD_SECRET_ID") or TENCENTCLOUD_SECRET_ID
-        secret_key = os.getenv("TENCENTCLOUD_SECRET_KEY") or TENCENTCLOUD_SECRET_KEY
+        secret_id = os.getenv("TENCENTCLOUD_SECRET_ID")
+        secret_key = os.getenv("TENCENTCLOUD_SECRET_KEY")
         
         if not secret_id or not secret_key:
             print("Error: TENCENTCLOUD_SECRET_ID and TENCENTCLOUD_SECRET_KEY must be set as environment variables or in tencent_config.py")
@@ -179,22 +236,31 @@ if __name__ == "__main__":
     print("Testing Tencent Cloud AI3D API...")
     print("=" * 50)
     
-    print("\n1. Testing with Image URL:")
-    result1 = test_tencent_ai3d_api()
+    print("\n1. Testing with Multiview Images:")
+    result_multiview = test_multiview_api()
     
     # If we got a job ID, check its status
-    if result1 and hasattr(result1, 'JobId'):
-        print(f"\nChecking status for job: {result1.JobId}")
-        check_job_status(result1.JobId)
+    if result_multiview and hasattr(result_multiview, 'JobId'):
+        print(f"\nChecking status for multiview job: {result_multiview.JobId}")
+        check_job_status(result_multiview.JobId)
     
-    print("\n" + "=" * 50)
-    print("\n2. Testing with Text Prompt:")
-    result2 = test_with_prompt()
+    # print("\n" + "=" * 50)
+    # print("\n2. Testing with Single Image URL:")
+    # result1 = test_tencent_ai3d_api()
     
-    # If we got a job ID, check its status
-    if result2 and hasattr(result2, 'JobId'):
-        print(f"\nChecking status for job: {result2.JobId}")
-        check_job_status(result2.JobId)
+    # # If we got a job ID, check its status
+    # if result1 and hasattr(result1, 'JobId'):
+    #     print(f"\nChecking status for job: {result1.JobId}")
+    #     check_job_status(result1.JobId)
+    
+    # print("\n" + "=" * 50)
+    # print("\n3. Testing with Text Prompt:")
+    # result2 = test_with_prompt()
+    
+    # # If we got a job ID, check its status
+    # if result2 and hasattr(result2, 'JobId'):
+    #     print(f"\nChecking status for job: {result2.JobId}")
+    #     check_job_status(result2.JobId)
     
     print("\n" + "=" * 50)
     print("Test completed!")

@@ -25,7 +25,7 @@ import logging
 from dotenv import load_dotenv
 load_dotenv()
 
-# Configure logging
+# Configure logging first
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -35,6 +35,16 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+# Import studio module
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    from studio_module import create_studio_manager
+    STUDIO_AVAILABLE = True
+    logger.info("✅ Studio module imported successfully")
+except ImportError as e:
+    logger.warning(f"⚠️ Studio module not available: {e}")
+    STUDIO_AVAILABLE = False
 
 app = Flask(__name__)
 CORS(app, resources={
@@ -812,6 +822,234 @@ def health():
         "timestamp": datetime.now().isoformat(),
         "active_sessions": len(active_sessions)
     })
+
+# Studio API Routes
+@app.route('/api/studio/images')
+def list_studio_images():
+    """List images from GCP public bucket"""
+    try:
+        if not STUDIO_AVAILABLE:
+            return jsonify({"error": "Studio functionality not available"}), 503
+        
+        # Get query parameters
+        prefix = request.args.get('prefix', 'public_images/')
+        max_results = int(request.args.get('max_results', 100))
+        search_query = request.args.get('search', '')
+        
+        # Create studio manager
+        studio_manager = create_studio_manager()
+        
+        # Search or list images
+        if search_query:
+            result = studio_manager.search_images(search_query, prefix, max_results)
+        else:
+            result = studio_manager.list_public_images(prefix, max_results)
+        
+        if result["success"]:
+            return jsonify({
+                "success": True,
+                "images": result["images"],
+                "total_count": result["total_count"],
+                "search_query": search_query if search_query else None
+            })
+        else:
+            return jsonify({"error": result["error"]}), 500
+            
+    except Exception as e:
+        logger.error(f"Error listing studio images: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/studio/images/<path:image_path>')
+def get_studio_image_metadata(image_path):
+    """Get metadata for a specific studio image"""
+    try:
+        if not STUDIO_AVAILABLE:
+            return jsonify({"error": "Studio functionality not available"}), 503
+        
+        # Create studio manager
+        studio_manager = create_studio_manager()
+        
+        # Get image metadata
+        result = studio_manager.get_image_metadata(image_path)
+        
+        if result["success"]:
+            return jsonify({
+                "success": True,
+                "metadata": result["metadata"]
+            })
+        else:
+            return jsonify({"error": result["error"]}), 404
+            
+    except Exception as e:
+        logger.error(f"Error getting studio image metadata: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/studio/bucket-info')
+def get_studio_bucket_info():
+    """Get information about the studio bucket"""
+    try:
+        if not STUDIO_AVAILABLE:
+            return jsonify({"error": "Studio functionality not available"}), 503
+        
+        # Create studio manager
+        studio_manager = create_studio_manager()
+        
+        # Get bucket info
+        result = studio_manager.get_bucket_info()
+        
+        if result["success"]:
+            return jsonify({
+                "success": True,
+                "bucket_info": result["bucket_info"]
+            })
+        else:
+            return jsonify({"error": result["error"]}), 500
+            
+    except Exception as e:
+        logger.error(f"Error getting studio bucket info: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/studio/signed-url/<path:image_path>')
+def get_studio_signed_url(image_path):
+    """Generate a signed URL for temporary access to a studio image"""
+    try:
+        if not STUDIO_AVAILABLE:
+            return jsonify({"error": "Studio functionality not available"}), 503
+        
+        # Get expiration time from query parameters (default: 60 minutes)
+        expiration_minutes = int(request.args.get('expiration', 60))
+        
+        # Create studio manager
+        studio_manager = create_studio_manager()
+        
+        # Generate signed URL
+        result = studio_manager.generate_signed_url(image_path, expiration_minutes)
+        
+        if result["success"]:
+            return jsonify({
+                "success": True,
+                "signed_url": result["signed_url"],
+                "expires_in_minutes": result["expires_in_minutes"]
+            })
+        else:
+            return jsonify({"error": result["error"]}), 404
+            
+    except Exception as e:
+        logger.error(f"Error generating signed URL for {image_path}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/studio/zipurl', methods=['POST'])
+def get_studio_zipurl():
+    """Get zipurl for a specific image URL from database"""
+    try:
+        if not STUDIO_AVAILABLE:
+            return jsonify({"error": "Studio functionality not available"}), 503
+        
+        data = request.get_json()
+        if not data or 'imageurl' not in data:
+            return jsonify({"error": "imageurl is required in request body"}), 400
+        
+        imageurl = data['imageurl']
+        
+        # Create studio manager
+        studio_manager = create_studio_manager()
+        
+        # Get zipurl from database
+        result = studio_manager.get_zipurl_from_db(imageurl)
+        
+        if result["success"]:
+            return jsonify({
+                "success": True,
+                "imageurl": result["imageurl"],
+                "zipurl": result["zipurl"]
+            })
+        else:
+            return jsonify({"error": result["error"]}), 404
+            
+    except Exception as e:
+        logger.error(f"Error getting zipurl: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/studio/proxy-zip/<path:image_path>')
+def proxy_zip_file(image_path):
+    """Proxy zip file download to bypass CORS restrictions"""
+    try:
+        if not STUDIO_AVAILABLE:
+            return jsonify({"error": "Studio functionality not available"}), 503
+        
+        # Create studio manager
+        studio_manager = create_studio_manager()
+        
+        # Get zipurl from database
+        # First, reconstruct the authenticated image URL
+        authenticated_url = f"https://storage.cloud.google.com/vicino.ai/{image_path}?authuser=3"
+        zipurl_result = studio_manager.get_zipurl_from_db(authenticated_url)
+        
+        if not zipurl_result["success"]:
+            return jsonify({"error": "No zip file found for this image"}), 404
+        
+        zipurl = zipurl_result["zipurl"]
+        logger.info(f"🔍 Original zipurl from database: {zipurl}")
+        
+        # Download the zip file using authenticated GCP client
+        try:
+            # Extract bucket and blob path from zipurl
+            # Handle both formats:
+            # - https://storage.googleapis.com/bucket-name/path/to/file.zip
+            # - https://storage.cloud.google.com/bucket-name/path/to/file.zip?authuser=3
+            
+            # Clean the URL by removing query parameters
+            clean_zipurl = zipurl.split('?')[0]
+            logger.info(f"🔍 Cleaned zipurl: {clean_zipurl}")
+            
+            if clean_zipurl.startswith('https://storage.googleapis.com/'):
+                url_parts = clean_zipurl.replace('https://storage.googleapis.com/', '').split('/', 1)
+            elif clean_zipurl.startswith('https://storage.cloud.google.com/'):
+                url_parts = clean_zipurl.replace('https://storage.cloud.google.com/', '').split('/', 1)
+            else:
+                return jsonify({"error": f"Unsupported zip URL format: {zipurl}"}), 400
+                
+            if len(url_parts) == 2:
+                zip_bucket_name, zip_blob_path = url_parts
+                
+                logger.info(f"✅ Attempting to download from bucket: {zip_bucket_name}, path: {zip_blob_path}")
+                
+                # Use GCP client to download the blob
+                client = studio_manager.client
+                bucket = client.bucket(zip_bucket_name)
+                blob = bucket.blob(zip_blob_path)
+                
+                if blob.exists():
+                    logger.info(f"✅ Blob exists, downloading {zip_blob_path}")
+                    # Download blob content
+                    blob_content = blob.download_as_bytes()
+                    
+                    logger.info(f"✅ Downloaded {len(blob_content)} bytes")
+                    
+                    # Return the zip file with proper headers
+                    return Response(
+                        blob_content,
+                        headers={
+                            'Content-Type': 'application/zip',
+                            'Content-Disposition': f'attachment; filename="{image_path.replace("/", "_")}.zip"',
+                            'Access-Control-Allow-Origin': '*',
+                            'Content-Length': str(len(blob_content))
+                        }
+                    )
+                else:
+                    logger.error(f"❌ Zip file not found: {zip_bucket_name}/{zip_blob_path}")
+                    return jsonify({"error": "Zip file not found in GCP storage"}), 404
+            else:
+                logger.error(f"❌ Invalid zip URL format, got {len(url_parts)} parts from: {clean_zipurl}")
+                return jsonify({"error": "Invalid zip URL format"}), 400
+                
+        except Exception as download_error:
+            logger.error(f"Error downloading zip file: {download_error}")
+            return jsonify({"error": f"Download failed: {str(download_error)}"}), 500
+            
+    except Exception as e:
+        logger.error(f"Error proxying zip file: {e}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     # For production deployment on EC2

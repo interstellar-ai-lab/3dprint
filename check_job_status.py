@@ -12,25 +12,18 @@ from tencentcloud.common.profile.http_profile import HttpProfile
 from tencentcloud.common.exception.tencent_cloud_sdk_exception import TencentCloudSDKException
 from tencentcloud.ai3d.v20250513 import ai3d_client, models
 
+from dotenv import load_dotenv
+load_dotenv('.env')
+
 def check_job_status(job_id):
     """
     Check the status of a specific job
     """
     try:
-        # Import configuration
-        try:
-            from tencent_config import (
-                TENCENTCLOUD_SECRET_ID, 
-                TENCENTCLOUD_SECRET_KEY, 
-                TENCENTCLOUD_REGION, 
-                TENCENTCLOUD_ENDPOINT
-            )
-        except ImportError:
-            print("Warning: tencent_config.py not found, using environment variables only")
-            TENCENTCLOUD_SECRET_ID = os.getenv("TENCENTCLOUD_SECRET_ID")
-            TENCENTCLOUD_SECRET_KEY = os.getenv("TENCENTCLOUD_SECRET_KEY")
-            TENCENTCLOUD_REGION = "ap-guangzhou"
-            TENCENTCLOUD_ENDPOINT = "ai3d.tencentcloudapi.com"
+        TENCENTCLOUD_SECRET_ID = os.getenv("TENCENTCLOUD_SECRET_ID")
+        TENCENTCLOUD_SECRET_KEY = os.getenv("TENCENTCLOUD_SECRET_KEY")
+        TENCENTCLOUD_REGION = "ap-guangzhou"
+        TENCENTCLOUD_ENDPOINT = "ai3d.tencentcloudapi.com"
         
         if not TENCENTCLOUD_SECRET_ID or not TENCENTCLOUD_SECRET_KEY:
             print("Error: TENCENTCLOUD_SECRET_ID and TENCENTCLOUD_SECRET_KEY must be set as environment variables")
@@ -68,15 +61,13 @@ def check_job_status(job_id):
 
 def main():
     # Load environment variables from env.local and .env
-    from dotenv import load_dotenv
-    load_dotenv('env.local')
-    load_dotenv('.env')
     
     print("Checking Tencent Cloud AI3D Job Status...")
     print("=" * 50)
     
     # Job IDs from our previous tests
     job_ids = [
+        "1345964238652669952", # dog
         "1345307282845777920",  # From first test
         "1345308348844916736",  # From second test
     ]

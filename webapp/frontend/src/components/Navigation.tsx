@@ -72,6 +72,14 @@ export const Navigation: React.FC = () => {
             >
               Team
             </button>
+            <button 
+              onClick={() => window.open('http://localhost:8000/studio', '_blank')}
+              className={`font-medium transition-colors ${
+                isScrolled ? 'text-gray-700 hover:text-purple-600' : 'text-white/90 hover:text-white'
+              }`}
+            >
+              Studio
+            </button>
             <button className={`px-4 py-2 rounded-full font-medium transition-all ${
               isScrolled 
                 ? 'bg-purple-600 text-white hover:bg-purple-700' 
@@ -127,6 +135,12 @@ export const Navigation: React.FC = () => {
                 className="text-gray-700 hover:text-purple-600 font-medium text-left"
               >
                 Team
+              </button>
+              <button 
+                onClick={() => window.open('http://localhost:8000/studio', '_blank')}
+                className="text-gray-700 hover:text-purple-600 font-medium text-left"
+              >
+                Studio
               </button>
               <button className="bg-purple-600 text-white px-4 py-2 rounded-full font-medium hover:bg-purple-700">
                 Contact
