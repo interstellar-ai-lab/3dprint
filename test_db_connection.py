@@ -119,8 +119,8 @@ def insert_test_data():
         
         print("\n💾 Inserting test data...")
         
-        imageurl = "https://storage.googleapis.com/vicino.ai/generated_images/session_059c9a3e-633c-46b4-9579-be16cd86d98f/iteration_01_20250808_135302.png"
-        zipurl = "https://storage.googleapis.com/vicino.ai/generated_3d_zip/232fb4f3-12f6-40a1-9de7-b576aa50fe9f_0.zip"
+        imageurl = "https://example.com/test-image.png"
+        zipurl = "https://example.com/test-model.zip"
         
         cursor.execute("""
             INSERT INTO public.imageand3durl (imageurl, zipurl) 

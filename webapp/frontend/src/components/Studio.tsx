@@ -57,7 +57,7 @@ export const Studio: React.FC = () => {
   const fetchImages = async (search: string = '') => {
     try {
       setSearchLoading(true);
-      // Use Supabase endpoint instead of GCP
+      // Use Supabase endpoint for data storage
       const url = new URL(`${API_BASE}/api/studio/supabase/images`);
       if (search) {
         url.searchParams.append('search', search);
@@ -81,19 +81,9 @@ export const Studio: React.FC = () => {
     }
   };
 
+  // Bucket info is not needed for Supabase storage
   const fetchBucketInfo = async () => {
-    try {
-      const response = await fetch(`${API_BASE}/api/studio/bucket-info`);
-      const data = await response.json();
-      
-      if (data.success) {
-        setBucketInfo(data.bucket_info);
-      } else {
-        console.error('Failed to fetch bucket info:', data.error);
-      }
-    } catch (err) {
-      console.error('Error fetching bucket info:', err);
-    }
+    // Bucket info is not needed for Supabase storage
   };
 
   useEffect(() => {
@@ -214,7 +204,7 @@ export const Studio: React.FC = () => {
                 <p className="text-white/60 text-sm">
                   Professional 3D Model Viewer
                   <span className="text-white/40 ml-2">
-                    • {images.length} models available (Supabase)
+                    • {images.length} models available
                   </span>
                 </p>
               </div>
@@ -227,7 +217,7 @@ export const Studio: React.FC = () => {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search Supabase models..."
+                  placeholder="Search models..."
                   className="pl-10 pr-4 py-2 bg-white/10 backdrop-blur border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-400/50 focus:border-purple-400/50 transition-all w-64"
                 />
                 <svg className="w-5 h-5 text-white/50 absolute left-3 top-1/2 transform -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -252,7 +242,7 @@ export const Studio: React.FC = () => {
         <div className="w-80 bg-slate-900/50 backdrop-blur border-r border-purple-500/20 overflow-y-auto">
           <div className="p-4">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white">Model Library (Supabase)</h2>
+              <h2 className="text-lg font-semibold text-white">Model Library</h2>
               <div className="text-sm text-white/60">{images.length} models</div>
             </div>
 
@@ -276,7 +266,7 @@ export const Studio: React.FC = () => {
                 </div>
                 <h3 className="text-white/70 font-medium mb-2">No models found</h3>
                 <p className="text-white/50 text-sm">
-                  {searchQuery ? 'Try a different search term.' : 'The Supabase database is empty or not accessible.'}
+                  {searchQuery ? 'Try a different search term.' : 'The database is empty or not accessible.'}
                 </p>
               </div>
             ) : (
@@ -412,9 +402,9 @@ export const Studio: React.FC = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-3">Welcome to 3D Studio (Supabase)</h3>
+                <h3 className="text-xl font-semibold text-white mb-3">Welcome to 3D Studio</h3>
                 <p className="text-white/60 leading-relaxed">
-                  Select a model from the Supabase library to begin exploring in 3D. 
+                  Select a model from the library to begin exploring in 3D. 
                   Use your mouse to rotate, zoom, and interact with the models.
                 </p>
                 <div className="mt-6 flex items-center justify-center space-x-6 text-sm text-white/40">

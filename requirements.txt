@@ -15,8 +15,7 @@ numpy>=1.24.0
 requests>=2.31.0
 aiohttp>=3.8.0
 
-# Cloud storage
-google-cloud-storage>=2.10.0
+# Cloud storage removed - using Supabase instead
 
 # Database
 psycopg2-binary>=2.9.0
