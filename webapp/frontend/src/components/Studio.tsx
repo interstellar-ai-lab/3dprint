@@ -52,7 +52,7 @@ export const Studio: React.FC = () => {
   const [viewerEngine, setViewerEngine] = useState<'threejs' | 'online3d'>('threejs');
 
   // API base URL - adjust this according to your backend setup
-  const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8001';
+  const API_BASE = process.env.REACT_APP_API_URL || 'https://vicino.ai';
 
   const fetchImages = async (search: string = '') => {
     try {
