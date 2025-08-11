@@ -71,6 +71,34 @@ if not OPENAI_API_KEY:
 openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 openai_sync_client = OpenAI(api_key=OPENAI_API_KEY)
 
+# Supabase configuration
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+SUPABASE_BUCKET_NAME = "generated-images-bucket"
+
+# Initialize Supabase client if available
+try:
+    from supabase import create_client, Client
+    if SUPABASE_URL and SUPABASE_SERVICE_KEY:
+        # Use service key for server-side operations (bypasses RLS)
+        supabase_client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        SUPABASE_AVAILABLE = True
+        logger.info("✅ Supabase client initialized successfully with service key")
+    elif SUPABASE_URL and SUPABASE_ANON_KEY:
+        # Fallback to anon key if service key not available
+        supabase_client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+        SUPABASE_AVAILABLE = True
+        logger.info("✅ Supabase client initialized with anon key (RLS restrictions may apply)")
+    else:
+        supabase_client = None
+        SUPABASE_AVAILABLE = False
+        logger.warning("⚠️ Supabase URL or keys not found in environment variables")
+except ImportError:
+    supabase_client = None
+    SUPABASE_AVAILABLE = False
+    logger.warning("⚠️ Supabase library not installed. Install with: pip install supabase")
+
 async def download_image_to_pil(image_url: str) -> Optional[Image.Image]:
     """Download image from URL and convert to PIL Image"""
     try:
@@ -85,6 +113,69 @@ async def download_image_to_pil(image_url: str) -> Optional[Image.Image]:
                     return None
     except Exception as e:
         logger.error(f"Error loading image from {image_url}: {e}")
+        return None
+
+def upload_image_to_supabase(image_data: bytes, filename: str, content_type: str = "image/png", bucket_name: str = None) -> Optional[str]:
+    """Upload file to Supabase storage bucket using service key"""
+    if not SUPABASE_AVAILABLE or not supabase_client:
+        logger.warning("⚠️ Supabase not available, skipping upload")
+        return None
+    
+    # Use provided bucket name or default to images bucket
+    target_bucket = bucket_name or SUPABASE_BUCKET_NAME
+    
+    try:
+        # Upload to Supabase storage using service key
+        response = supabase_client.storage.from_(target_bucket).upload(
+            path=filename,
+            file=image_data,
+            file_options={"content-type": content_type}
+        )
+        
+        if response:
+            # Generate public URL
+            public_url = f"{SUPABASE_URL}/storage/v1/object/public/{target_bucket}/{filename}"
+            logger.info(f"✅ Uploaded file to Supabase bucket '{target_bucket}': {public_url}")
+            return public_url
+        else:
+            logger.error("❌ Failed to upload file to Supabase")
+            return None
+            
+    except Exception as e:
+        logger.error(f"❌ Error uploading file to Supabase: {e}")
+        return None
+
+def insert_image_record(target_object: str, image_url: str, iteration: int = None, model_3d_url: str = None) -> Optional[int]:
+    """Insert image record into generated_images table"""
+    if not SUPABASE_AVAILABLE or not supabase_client:
+        logger.warning("⚠️ Supabase not available, skipping database insert")
+        return None
+    
+    try:
+        # Prepare data for insertion
+        data = {
+            "target_object": target_object,
+            "image_url": image_url,
+            "iteration": iteration
+        }
+        
+        # Add 3D model URL if provided
+        if model_3d_url:
+            data["3d_url"] = model_3d_url
+        
+        # Insert the record
+        response = supabase_client.table('generated_images').insert(data).execute()
+        
+        if response.data and len(response.data) > 0:
+            inserted_id = response.data[0].get('id')
+            logger.info(f"✅ Inserted image record with ID: {inserted_id}")
+            return inserted_id
+        else:
+            logger.error("❌ No data returned from insert operation")
+            return None
+            
+    except Exception as e:
+        logger.error(f"❌ Error inserting image record: {e}")
         return None
 
 def download_image_to_pil_sync(image_url: str) -> Optional[Image.Image]:
@@ -221,12 +312,19 @@ OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION."""
             first_item = response.data[0]
             if hasattr(first_item, 'url') and first_item.url:
                 image_url = first_item.url
+                
+                image_url = first_item.url
                 return image_url
+                    
             elif hasattr(first_item, 'b64_json') and first_item.b64_json:
-                # Handle base64 data - save to PNG file
+                # Handle base64 data - save to PNG file and upload to Supabase
                 try:
                     # Decode base64 data
                     image_data = base64.b64decode(first_item.b64_json)
+                    
+                    # Generate filename for Supabase
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"{target_object.replace(' ', '_')}_{iteration}_{timestamp}.png"
                     
                     # Create temporary file
                     import tempfile
@@ -235,6 +333,7 @@ OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION."""
                     temp_file.close()
                     
                     return f"file://{temp_file.name}"
+                        
                 except Exception as e:
                     logger.error(f"❌ Error handling base64 data: {e}")
                     return None
@@ -539,6 +638,8 @@ def save_metadata(session_id: str, iteration: int, target_object: str, image_url
         "mode": mode
     }
     
+
+    
     with open(metadata_file, 'w') as f:
         json.dump(metadata_data, f, indent=2)
     
@@ -817,6 +918,150 @@ def list_sessions():
     except Exception as e:
         logger.error(f"Error listing sessions: {e}")
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/generate-3d', methods=['POST'])
+def generate_3d():
+    """Generate 3D model from image using Tripo API"""
+    try:
+        data = request.get_json()
+        session_id = data.get('sessionId')
+        iteration = data.get('iteration')
+        target_object = data.get('targetObject')
+        image_url = data.get('imageUrl')
+        
+        if not all([session_id, iteration, target_object, image_url]):
+            return jsonify({"error": "Missing required parameters"}), 400
+        
+        # Check if session exists
+        if session_id not in active_sessions:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Get image data (handle both local files and URLs)
+        try:
+            if image_url.startswith("file://"):
+                # Handle local file
+                file_path = image_url.replace("file://", "")
+                with open(file_path, 'rb') as f:
+                    image_data = f.read()
+            else:
+                # Handle HTTP URL
+                import requests
+                response = requests.get(image_url, timeout=30)
+                if response.status_code != 200:
+                    return jsonify({"error": "Failed to download image"}), 400
+                image_data = response.content
+        except Exception as e:
+            logger.error(f"Error reading image: {e}")
+            return jsonify({"error": "Failed to read image"}), 400
+        
+        # Upload to Supabase
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{target_object.replace(' ', '_')}_{iteration}_{timestamp}.png"
+        
+        supabase_url = upload_image_to_supabase(image_data, filename)
+        if not supabase_url:
+            return jsonify({"error": "Failed to upload image to Supabase"}), 500
+        
+        # Insert record into database
+        record_id = insert_image_record(target_object, supabase_url, iteration)
+        if not record_id:
+            return jsonify({"error": "Failed to insert database record"}), 500
+        
+        # Generate 3D model using Tripo API
+        try:
+            # Import the Tripo functions
+            import sys
+            import os
+            sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+            
+            from test_tripo_multiview_to_3d import create_multiview_task, get_task, download, crop_multiview_image
+            
+            # Load the image and crop it into 4 views
+            from PIL import Image
+            import io
+            
+            # Load the image
+            image = Image.open(io.BytesIO(image_data))
+            
+            # Crop the image into 4 views (front, right, left, back)
+            views = crop_multiview_image(image)
+            
+            # Submit to Tripo API
+            task_id = create_multiview_task(views)
+            
+            # Poll for completion
+            max_attempts = 60  # 10 minutes with 10-second intervals
+            for attempt in range(max_attempts):
+                info = get_task(task_id)
+                if info.get("code") != 0:
+                    return jsonify({"error": f"Tripo API error: {info}"}), 500
+                
+                status = info["data"]["status"]
+                if status in ("success", "succeeded", "SUCCESS"):
+                    out = info["data"]["output"]
+                    model_url = out.get("pbr_model") or out.get("model")
+                    if model_url:
+                        # Download the model
+                        model_filename = f"tripo_model_{session_id}_{iteration}.glb"
+                        model_path = download(model_url, model_filename)
+                        
+                        # Upload GLB file to Supabase 3D files bucket
+                        glb_supabase_url = None
+                        if SUPABASE_AVAILABLE and supabase_client:
+                            try:
+                                # Read the downloaded GLB file
+                                with open(model_path, 'rb') as f:
+                                    glb_data = f.read()
+                                
+                                # Upload to Supabase 3D files bucket
+                                glb_filename = f"{target_object.replace(' ', '_')}_{iteration}_{timestamp}.glb"
+                                glb_supabase_url = upload_image_to_supabase(
+                                    glb_data, 
+                                    glb_filename, 
+                                    content_type="model/gltf-binary",
+                                    bucket_name="generated-3d-files"
+                                )
+                                
+                                if glb_supabase_url:
+                                    # Update the database record with Supabase 3D model URL
+                                    supabase_client.table('generated_images').update({
+                                        "3d_url": glb_supabase_url
+                                    }).eq('id', record_id).execute()
+                                    logger.info(f"✅ Uploaded GLB to Supabase: {glb_supabase_url}")
+                                else:
+                                    logger.error("❌ Failed to upload GLB to Supabase")
+                                    
+                            except Exception as e:
+                                logger.error(f"Error uploading GLB to Supabase: {e}")
+                        
+                        # Clean up local file
+                        try:
+                            os.remove(model_path)
+                        except:
+                            pass
+                        
+                        return jsonify({
+                            "success": True,
+                            "model_url": glb_supabase_url or model_path,
+                            "supabase_record_id": record_id
+                        })
+                    else:
+                        return jsonify({"error": "No model URL in Tripo response"}), 500
+                elif status in ("failed", "error"):
+                    return jsonify({"error": f"Tripo task failed: {info}"}), 500
+                
+                import time
+                time.sleep(10)  # Wait 10 seconds before next poll
+            
+            return jsonify({"error": "Timeout waiting for 3D generation"}), 408
+            
+        except Exception as e:
+            logger.error(f"Error generating 3D model: {e}")
+            return jsonify({"error": f"3D generation failed: {str(e)}"}), 500
+        
+    except Exception as e:
+        logger.error(f"Error in generate-3d endpoint: {e}")
+        return jsonify({"error": "Internal server error"}), 500
 
 @app.route('/api/health')
 def health():

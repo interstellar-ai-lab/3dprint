@@ -357,6 +357,55 @@ class StudioSupabaseManager:
             
         return result
     
+    def upload_image(self, image_data: bytes, filename: str, content_type: str = "image/png") -> Dict[str, Any]:
+        """
+        Upload an image to Supabase storage
+        
+        Args:
+            image_data: Image data as bytes
+            filename: Name of the file to upload
+            content_type: MIME type of the image
+            
+        Returns:
+            Dict containing success status and uploaded file info
+        """
+        result = {
+            "success": False,
+            "error": None,
+            "file_path": None,
+            "public_url": None
+        }
+        
+        if not self._authenticated or not self.client:
+            result["error"] = "Client not initialized. Call initialize() first."
+            return result
+            
+        if not image_data or not filename:
+            result["error"] = "image_data and filename are required"
+            return result
+            
+        try:
+            # Upload file to Supabase storage
+            response = self.client.storage.from_(self.bucket_name).upload(
+                path=filename,
+                file=image_data,
+                file_options={"content-type": content_type}
+            )
+            
+            if response:
+                result["success"] = True
+                result["file_path"] = filename
+                result["public_url"] = f"{self.supabase_url}/storage/v1/object/public/{self.bucket_name}/{filename}"
+                logger.info(f"✅ Uploaded image: {filename}")
+            else:
+                result["error"] = "Upload failed - no response from storage"
+                
+        except Exception as e:
+            result["error"] = f"Error uploading image: {e}"
+            logger.error(f"❌ {result['error']}")
+            
+        return result
+    
     def search_images(self, query: str, max_results: int = 50) -> Dict[str, Any]:
         """
         Search images by target_object description

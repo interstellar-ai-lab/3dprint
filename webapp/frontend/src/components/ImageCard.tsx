@@ -82,8 +82,10 @@ export const ImageCard: React.FC<ImageCardProps> = ({
     }
   };
 
-  const displayName = target_object || filename || `Image ${id}`;
-  const displayDate = updated || created_at;
+  // Use target_object from database if available, otherwise fall back to name or filename
+  const displayName = target_object || name || filename || `Image ${id}`;
+  const displayDate = created_at; // Use created_at from database
+  const hasModel = has_3d_model || !!model_3d_url;
 
   return (
     <div
@@ -107,7 +109,7 @@ export const ImageCard: React.FC<ImageCardProps> = ({
               (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjMzc0MTUxIi8+CjxwYXRoIGQ9Ik0yMCAyMEw0NCA0NE0yMCA0NEw0NCAyMCIgc3Ryb2tlPSIjOUI5Qjk5IiBzdHJva2Utd2lkdGg9IjIiLz4KPC9zdmc+';
             }}
           />
-          {has_3d_model && (
+          {hasModel && (
             <div className="absolute inset-0 bg-gradient-to-t from-purple-600/80 to-transparent">
               <div className="absolute bottom-1 right-1">
                 <div className="w-4 h-4 bg-white rounded-full flex items-center justify-center">
@@ -127,12 +129,15 @@ export const ImageCard: React.FC<ImageCardProps> = ({
           </h3>
           <div className="mt-1 space-y-1">
             <p className="text-white/40 text-xs">{formatDate(displayDate)}</p>
-            {iteration && (
+            {iteration !== null && iteration !== undefined && (
               <p className="text-white/40 text-xs">Iteration: {iteration}</p>
             )}
             <p className="text-white/40 text-xs">ID: {id}</p>
+            {size > 0 && (
+              <p className="text-white/40 text-xs">{formatFileSize(size)}</p>
+            )}
           </div>
-          {has_3d_model && (zipurl || model_3d_url) && (
+          {hasModel && (
             <div className="mt-2">
               <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-purple-600/20 text-purple-300 rounded-full">
                 <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
@@ -159,7 +164,7 @@ export const ImageCard: React.FC<ImageCardProps> = ({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
               </svg>
             </button>
-            {has_3d_model && (zipurl || model_3d_url) && (
+            {hasModel && (zipurl || model_3d_url) && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -177,7 +182,7 @@ export const ImageCard: React.FC<ImageCardProps> = ({
               </button>
             )}
           </div>
-          {iteration && (
+          {iteration !== null && iteration !== undefined && (
             <div className="text-xs text-white/30 font-mono">
               #{iteration}
             </div>

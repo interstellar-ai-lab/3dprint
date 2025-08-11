@@ -141,6 +141,9 @@ export const StatusDisplay: React.FC = () => {
                 <ImageGrid 
                   imageUrl={`${API_BASE_URL}/api/image/${currentSession.session_id}/${iteration.iteration}`}
                   originalUrl={iteration.image_url}
+                  sessionId={currentSession.session_id}
+                  iteration={iteration.iteration}
+                  targetObject={currentSession.target_object}
                 />
 
                 {/* Evaluation Results */}

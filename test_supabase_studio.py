@@ -97,8 +97,201 @@ def test_supabase_studio():
     else:
         print(f"❌ Search failed: {search_result['error']}")
     
+    # Test uploading a PNG to the bucket
+    print(f"\n📤 Testing PNG upload to Supabase bucket...")
+    upload_result = test_upload_png(manager)
+    
+    if upload_result["success"]:
+        print("✅ PNG upload test completed successfully!")
+        print(f"  Uploaded file: {upload_result['filename']}")
+        print(f"  Public URL: {upload_result['public_url']}")
+    else:
+        print(f"❌ PNG upload test failed: {upload_result['error']}")
+        if "solution" in upload_result:
+            print(f"  💡 {upload_result['solution']}")
+    
+    # Test uploading a PNG using service key
+    print(f"\n📤 Testing PNG upload using service key...")
+    service_upload_result = test_upload_png_service_key()
+    
+    if service_upload_result["success"]:
+        print("✅ Service key upload test completed successfully!")
+        print(f"  Uploaded file: {service_upload_result['filename']}")
+        print(f"  Public URL: {service_upload_result['public_url']}")
+    else:
+        print(f"❌ Service key upload test failed: {service_upload_result['error']}")
+    
     print("\n" + "=" * 50)
     print("✅ Test completed!")
+
+def test_upload_png(manager):
+    """Test uploading a PNG file to Supabase storage"""
+    try:
+        from PIL import Image
+        import io
+        import tempfile
+        from datetime import datetime
+        
+        # Create a simple test image
+        print("  Creating test PNG image...")
+        test_image = Image.new('RGB', (100, 100), color='red')
+        
+        # Save to temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
+            test_image.save(temp_file, format='PNG')
+            temp_file_path = temp_file.name
+        
+        # Read the file data
+        with open(temp_file_path, 'rb') as f:
+            image_data = f.read()
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"test_upload_{timestamp}.png"
+        
+        print(f"  Uploading {filename} to Supabase...")
+        
+        # Try to upload to Supabase using the manager's client
+        try:
+            response = manager.client.storage.from_(manager.bucket_name).upload(
+                path=filename,
+                file=image_data,
+                file_options={"content-type": "image/png"}
+            )
+            
+            if response:
+                # Generate public URL
+                public_url = f"{manager.supabase_url}/storage/v1/object/public/{manager.bucket_name}/{filename}"
+                
+                # Clean up temporary file
+                os.unlink(temp_file_path)
+                
+                return {
+                    "success": True,
+                    "filename": filename,
+                    "public_url": public_url,
+                    "size": len(image_data)
+                }
+            else:
+                # Clean up temporary file
+                os.unlink(temp_file_path)
+                return {
+                    "success": False,
+                    "error": "Upload response was empty"
+                }
+                
+        except Exception as upload_error:
+            error_msg = str(upload_error)
+            if "row-level security policy" in error_msg or "Unauthorized" in error_msg:
+                print(f"  ⚠️ RLS Error: {error_msg}")
+                print(f"  💡 Solution: Use SUPABASE_SERVICE_ROLE_KEY instead of SUPABASE_ANON_KEY")
+                print(f"  📝 To fix this, set the environment variable:")
+                print(f"     export SUPABASE_SERVICE_ROLE_KEY=your_service_role_key")
+                
+                # Clean up temporary file
+                os.unlink(temp_file_path)
+                
+                return {
+                    "success": False,
+                    "error": f"RLS Policy Error: {error_msg}. Use service role key for uploads.",
+                    "solution": "Set SUPABASE_SERVICE_ROLE_KEY environment variable"
+                }
+            else:
+                raise upload_error
+            
+    except Exception as e:
+        # Clean up temporary file if it exists
+        if 'temp_file_path' in locals():
+            try:
+                os.unlink(temp_file_path)
+            except:
+                pass
+        
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+def test_upload_png_service_key():
+    """Test uploading a PNG file using service key"""
+    try:
+        from PIL import Image
+        import tempfile
+        from datetime import datetime
+        from supabase import create_client
+        
+        # Get service key from environment
+        service_key = os.getenv('SUPABASE_SERVICE_KEY')
+        supabase_url = os.getenv('SUPABASE_URL')
+        
+        if not service_key or not supabase_url:
+            return {
+                "success": False,
+                "error": "Service key or URL not available"
+            }
+        
+        # Create service key client
+        service_client = create_client(supabase_url, service_key)
+        
+        # Create a simple test image
+        print("  Creating test PNG image for service key upload...")
+        test_image = Image.new('RGB', (100, 100), color='blue')
+        
+        # Save to temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
+            test_image.save(temp_file, format='PNG')
+            temp_file_path = temp_file.name
+        
+        # Read the file data
+        with open(temp_file_path, 'rb') as f:
+            image_data = f.read()
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"service_key_test_{timestamp}.png"
+        
+        print(f"  Uploading {filename} with service key...")
+        
+        # Upload to Supabase using service key client
+        response = service_client.storage.from_("generated-images-bucket").upload(
+            path=filename,
+            file=image_data,
+            file_options={"content-type": "image/png"}
+        )
+        
+        if response:
+            # Generate public URL
+            public_url = f"{supabase_url}/storage/v1/object/public/generated-images-bucket/{filename}"
+            
+            # Clean up temporary file
+            os.unlink(temp_file_path)
+            
+            return {
+                "success": True,
+                "filename": filename,
+                "public_url": public_url,
+                "size": len(image_data)
+            }
+        else:
+            # Clean up temporary file
+            os.unlink(temp_file_path)
+            return {
+                "success": False,
+                "error": "Upload response was empty"
+            }
+            
+    except Exception as e:
+        # Clean up temporary file if it exists
+        if 'temp_file_path' in locals():
+            try:
+                os.unlink(temp_file_path)
+            except:
+                pass
+        
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 if __name__ == "__main__":
     test_supabase_studio()

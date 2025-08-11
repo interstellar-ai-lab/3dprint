@@ -30,6 +30,9 @@ export const ThreeViewer: React.FC<ThreeViewerProps> = ({
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  // Check if model URL is valid and ready
+  const isModelReady = modelUrl && modelUrl.trim() !== '' && modelUrl !== 'null' && modelUrl !== 'undefined';
+
   // Initialize Three.js scene
   const initScene = () => {
     if (!mountRef.current) return;
@@ -100,8 +103,8 @@ export const ThreeViewer: React.FC<ThreeViewerProps> = ({
     animate();
 
     console.log('🎬 Scene initialized, checking if model should load');
-    // Load model if URL is already available
-    if (modelUrl) {
+    // Load model if URL is already available and valid
+    if (isModelReady) {
       console.log('🎯 Model URL available, triggering load');
       loadModel();
     }
@@ -109,7 +112,7 @@ export const ThreeViewer: React.FC<ThreeViewerProps> = ({
 
   // Load GLB model
   const loadModel = useCallback(async () => {
-    if (!modelUrl || !sceneRef.current) {
+    if (!isModelReady || !sceneRef.current) {
       return;
     }
 
@@ -202,7 +205,7 @@ export const ThreeViewer: React.FC<ThreeViewerProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [modelUrl]);
+  }, [modelUrl, isModelReady]);
 
   // Handle window resize
   const handleResize = () => {
@@ -264,19 +267,20 @@ export const ThreeViewer: React.FC<ThreeViewerProps> = ({
     console.log('🔄 ThreeViewer useEffect - checking conditions:', { 
       isOpen, 
       modelUrl: modelUrl ? modelUrl.substring(0, 50) + '...' : null, 
-      hasScene: !!sceneRef.current 
+      hasScene: !!sceneRef.current,
+      isModelReady
     });
     
-    if (isOpen && modelUrl && sceneRef.current) {
+    if (isOpen && isModelReady && sceneRef.current) {
       console.log('✅ All conditions met, loading model');
       loadModel();
     } else {
       console.log('❌ Conditions not met for loading');
       if (!isOpen) console.log('  - isOpen is false');
-      if (!modelUrl) console.log('  - modelUrl is empty');
+      if (!isModelReady) console.log('  - model URL not ready');
       if (!sceneRef.current) console.log('  - scene not initialized');
     }
-  }, [modelUrl, isOpen, loadModel]);
+  }, [modelUrl, isOpen, loadModel, isModelReady]);
 
   if (!isOpen) return null;
 
@@ -291,8 +295,22 @@ export const ThreeViewer: React.FC<ThreeViewerProps> = ({
             style={{ minHeight: '400px' }}
           />
           
+          {/* Model Not Ready State */}
+          {!isModelReady && (
+            <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center">
+              <div className="text-center max-w-sm w-full px-6">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+                <p className="text-white mb-2 text-lg font-medium">3D Model in Progress</p>
+                <p className="text-white/70 text-sm mb-4">The 3D model is currently being generated. Please wait...</p>
+                <div className="w-full bg-gray-700 rounded-full h-2">
+                  <div className="bg-gradient-to-r from-purple-600 to-purple-400 h-2 rounded-full animate-pulse"></div>
+                </div>
+              </div>
+            </div>
+          )}
+          
           {/* Loading State */}
-          {loading && (
+          {loading && isModelReady && (
             <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center">
               <div className="text-center max-w-sm w-full px-6">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
@@ -356,8 +374,22 @@ export const ThreeViewer: React.FC<ThreeViewerProps> = ({
             style={{ minHeight: '500px' }}
           />
           
+          {/* Model Not Ready State */}
+          {!isModelReady && (
+            <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center">
+              <div className="text-center max-w-sm w-full px-6">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-white mb-2 text-lg font-medium">3D Model in Progress</p>
+                <p className="text-white/70 text-sm mb-4">The 3D model is currently being generated. Please wait...</p>
+                <div className="w-full bg-gray-700 rounded-full h-2">
+                  <div className="bg-gradient-to-r from-blue-600 to-blue-400 h-2 rounded-full animate-pulse"></div>
+                </div>
+              </div>
+            </div>
+          )}
+          
           {/* Loading State */}
-          {loading && (
+          {loading && isModelReady && (
             <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center">
               <div className="text-center max-w-sm w-full px-6">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
@@ -395,7 +427,7 @@ export const ThreeViewer: React.FC<ThreeViewerProps> = ({
         {/* Footer */}
         <div className="p-4 border-t bg-gray-50 text-sm text-gray-600">
           <p>🎮 Use mouse to rotate, scroll to zoom, right-click and drag to pan</p>
-          <p>📁 Model: {modelUrl}</p>
+          <p>📁 Model: {isModelReady ? modelUrl : 'Generating...'}</p>
         </div>
       </div>
     </div>
