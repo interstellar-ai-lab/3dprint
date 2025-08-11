@@ -57,18 +57,32 @@ export const ThreeViewer: React.FC<ThreeViewerProps> = ({
 
     mountRef.current.appendChild(renderer.domElement);
 
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
+    // Lighting - Improved setup for better model visibility
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); // Increased intensity and changed to white
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    directionalLight.position.set(10, 10, 5);
+    // Main directional light from front-top-right
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    directionalLight.position.set(5, 5, 5);
     directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
     scene.add(directionalLight);
 
-    const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.6);
-    directionalLight2.position.set(-10, -10, -5);
+    // Secondary directional light from front-top-left
+    const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight2.position.set(-5, 5, 5);
     scene.add(directionalLight2);
+
+    // Fill light from bottom
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
+    fillLight.position.set(0, -5, 0);
+    scene.add(fillLight);
+
+    // Back light for better definition
+    const backLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    backLight.position.set(0, 0, -5);
+    scene.add(backLight);
 
     // Controls
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -131,11 +145,33 @@ export const ThreeViewer: React.FC<ThreeViewerProps> = ({
 
       const model = gltf.scene;
       
-      // Configure model
+      // Configure model for better visibility
       model.traverse((child: any) => {
         if (child.isMesh) {
           child.castShadow = true;
           child.receiveShadow = true;
+          
+          // Ensure materials are properly lit
+          if (child.material) {
+            // Enable lighting on materials
+            if (child.material.emissive) {
+              child.material.emissive.setHex(0x000000);
+            }
+            
+            // Ensure materials respond to lighting
+            if (child.material.color) {
+              // Don't override existing colors, just ensure they're visible
+              child.material.needsUpdate = true;
+            }
+            
+            // Set proper material properties for better visibility
+            if (child.material.roughness !== undefined) {
+              child.material.roughness = Math.max(0.1, child.material.roughness || 0.5);
+            }
+            if (child.material.metalness !== undefined) {
+              child.material.metalness = Math.min(0.9, child.material.metalness || 0.0);
+            }
+          }
         }
       });
 

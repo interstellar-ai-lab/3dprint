@@ -386,7 +386,7 @@ export const Studio: React.FC = () => {
                   />
                 ) : (
                   <Online3DViewer
-                    zipUrl={selected3DModel.model_3d_url || selected3DModel.zipurl || ''}
+                    modelUrl={selected3DModel.model_3d_url || selected3DModel.zipurl || ''}
                     isOpen={true}
                     onClose={() => setSelected3DModel(null)}
                     modelName={selected3DModel.filename}
