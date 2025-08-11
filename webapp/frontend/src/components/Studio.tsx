@@ -1,8 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { ThreeViewer } from './ThreeViewer';
+import { Online3DViewer } from './Online3DViewer';
 import { OrderModal } from './OrderModal';
+import { ImageCard } from './ImageCard';
 
-interface StudioImage {
+// Interface matching the generated_images table schema
+interface GeneratedImage {
+  // Database fields from generated_images table
+  id: number;
+  created_at: string | null;
+  target_object: string | null;
+  iteration: number | null;
+  image_url: string;
+  "3d_url": string | null;
+}
+
+// Extended interface for frontend display with computed fields
+interface StudioImage extends GeneratedImage {
+  // Additional computed/display fields
   name: string;
   filename: string;
   size: number;
@@ -13,6 +28,7 @@ interface StudioImage {
   zipurl?: string | null;
   has_3d_model?: boolean;
   authenticated_url?: string;
+  model_3d_url?: string;
 }
 
 interface BucketInfo {
@@ -30,29 +46,19 @@ export const Studio: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<StudioImage | null>(null);
-  const [imageModalOpen, setImageModalOpen] = useState(false);
+
   const [selected3DModel, setSelected3DModel] = useState<StudioImage | null>(null);
   const [orderModalOpen, setOrderModalOpen] = useState(false);
-  
-  // Material settings state
-  const [materialData, setMaterialData] = useState<{
-    materialMode: 'full' | 'texture-only' | 'basic';
-    availableMaterials: {
-      hasMTL: boolean;
-      hasTextures: boolean;
-      textureCount: number;
-    };
-    onMaterialModeChange: (mode: 'full' | 'texture-only' | 'basic') => void;
-  } | null>(null);
+  const [viewerEngine, setViewerEngine] = useState<'threejs' | 'online3d'>('threejs');
 
   // API base URL - adjust this according to your backend setup
-  const API_BASE = process.env.REACT_APP_API_URL || 'https://vicino.ai';
+  const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8001';
 
   const fetchImages = async (search: string = '') => {
     try {
       setSearchLoading(true);
-      const url = new URL(`${API_BASE}/api/studio/images`);
+      // Use Supabase endpoint instead of GCP
+      const url = new URL(`${API_BASE}/api/studio/supabase/images`);
       if (search) {
         url.searchParams.append('search', search);
       }
@@ -102,10 +108,22 @@ export const Studio: React.FC = () => {
 
   // Auto-select the first 3D model when images are loaded
   useEffect(() => {
+    console.log('🎯 Auto-select useEffect triggered:', { 
+      imagesCount: images.length, 
+      hasSelected: !!selected3DModel 
+    });
+    
     if (images.length > 0 && !selected3DModel) {
-      const first3DModel = images.find(img => img.has_3d_model && img.zipurl);
+      const first3DModel = images.find(img => img.has_3d_model && (img.zipurl || img.model_3d_url));
       if (first3DModel) {
+        console.log('🎯 Auto-selecting first 3D model:', {
+          name: first3DModel.filename,
+          model_3d_url: first3DModel.model_3d_url ? first3DModel.model_3d_url.substring(0, 50) + '...' : null,
+          zipurl: first3DModel.zipurl ? first3DModel.zipurl.substring(0, 50) + '...' : null
+        });
         setSelected3DModel(first3DModel);
+      } else {
+        console.log('❌ No 3D models found in images');
       }
     }
   }, [images, selected3DModel]);
@@ -116,13 +134,13 @@ export const Studio: React.FC = () => {
   };
 
   const handleImageClick = (image: StudioImage) => {
-    setSelectedImage(image);
-    setImageModalOpen(true);
+    // Select the image for 3D viewing instead of opening modal
+    setSelected3DModel(image);
   };
 
   const handle3DViewClick = (image: StudioImage, event?: React.MouseEvent) => {
     if (event) {
-      event.stopPropagation(); // Prevent triggering the image modal
+      event.stopPropagation();
     }
     setSelected3DModel(image);
   };
@@ -195,11 +213,9 @@ export const Studio: React.FC = () => {
                 <h1 className="text-2xl font-bold text-white">Vicino 3D Studio</h1>
                 <p className="text-white/60 text-sm">
                   Professional 3D Model Viewer
-                  {bucketInfo && (
-                    <span className="text-white/40 ml-2">
-                      • {images.length} models available
-                    </span>
-                  )}
+                  <span className="text-white/40 ml-2">
+                    • {images.length} models available (Supabase)
+                  </span>
                 </p>
               </div>
             </div>
@@ -211,7 +227,7 @@ export const Studio: React.FC = () => {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search models..."
+                  placeholder="Search Supabase models..."
                   className="pl-10 pr-4 py-2 bg-white/10 backdrop-blur border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-400/50 focus:border-purple-400/50 transition-all w-64"
                 />
                 <svg className="w-5 h-5 text-white/50 absolute left-3 top-1/2 transform -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -236,7 +252,7 @@ export const Studio: React.FC = () => {
         <div className="w-80 bg-slate-900/50 backdrop-blur border-r border-purple-500/20 overflow-y-auto">
           <div className="p-4">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white">Model Library</h2>
+              <h2 className="text-lg font-semibold text-white">Model Library (Supabase)</h2>
               <div className="text-sm text-white/60">{images.length} models</div>
             </div>
 
@@ -260,83 +276,38 @@ export const Studio: React.FC = () => {
                 </div>
                 <h3 className="text-white/70 font-medium mb-2">No models found</h3>
                 <p className="text-white/50 text-sm">
-                  {searchQuery ? 'Try a different search term.' : 'The library is empty or not accessible.'}
+                  {searchQuery ? 'Try a different search term.' : 'The Supabase database is empty or not accessible.'}
                 </p>
               </div>
             ) : (
               <div className="space-y-3">
                 {images.map((image) => (
-                  <div
-                    key={image.name}
-                    className={`group relative rounded-xl overflow-hidden transition-all duration-300 cursor-pointer ${
-                      selected3DModel?.name === image.name 
-                        ? 'bg-gradient-to-r from-purple-600/30 to-purple-400/20 border border-purple-400/50 shadow-lg shadow-purple-500/20' 
-                        : 'bg-white/5 backdrop-blur border border-white/10 hover:bg-white/10 hover:border-purple-300/20'
-                    }`}
+                  <ImageCard
+                    key={image.id || image.name}
+                    // Database fields
+                    id={image.id}
+                    created_at={image.created_at}
+                    target_object={image.target_object}
+                    iteration={image.iteration}
+                    image_url={image.image_url}
+                    model_3d_url={image.model_3d_url || image["3d_url"]}
+                    
+                    // Display fields
+                    name={image.name}
+                    filename={image.filename}
+                    size={image.size}
+                    updated={image.updated}
+                    content_type={image.content_type}
+                    public_url={image.public_url}
+                    thumbnail_url={image.thumbnail_url}
+                    zipurl={image.zipurl}
+                    has_3d_model={image.has_3d_model}
+                    authenticated_url={image.authenticated_url}
+                    
+                    // UI state
+                    isSelected={selected3DModel?.name === image.name}
                     onClick={() => handleImageClick(image)}
-                  >
-                    <div className="flex p-3">
-                      {/* Thumbnail */}
-                      <div className="relative w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
-                        <img
-                          src={image.public_url}
-                          alt={image.filename}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                        />
-                        {image.has_3d_model && (
-                          <div className="absolute inset-0 bg-gradient-to-t from-purple-600/80 to-transparent">
-                            <div className="absolute bottom-1 right-1">
-                              <div className="w-4 h-4 bg-white rounded-full flex items-center justify-center">
-                                <svg className="w-3 h-3 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
-                                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                </svg>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Info */}
-                      <div className="ml-3 flex-1 min-w-0">
-                        <h3 className="font-medium text-white truncate text-sm" title={image.filename}>
-                          {image.filename}
-                        </h3>
-                        <div className="mt-1 space-y-1">
-                          <p className="text-white/60 text-xs">{formatFileSize(image.size)}</p>
-                          <p className="text-white/40 text-xs">{formatDate(image.updated)}</p>
-                        </div>
-                        {image.has_3d_model && image.zipurl && (
-                          <div className="mt-2 flex gap-2">
-                            <button
-                              onClick={(e) => handle3DViewClick(image, e)}
-                              className={`px-3 py-1 text-xs rounded-md transition-all flex items-center flex-1 ${
-                                selected3DModel?.name === image.name 
-                                  ? 'bg-purple-500 text-white shadow-lg' 
-                                  : 'bg-white/10 text-white/80 hover:bg-white/20'
-                              }`}
-                            >
-                              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              {selected3DModel?.name === image.name ? 'Viewing' : 'View 3D'}
-                            </button>
-                            <div className="flex items-center px-2 py-1 bg-green-500/20 text-green-400 rounded-md text-xs">
-                              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                              </svg>
-                              Printable
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Selection indicator */}
-                    {selected3DModel?.name === image.name && (
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-purple-400 to-purple-600"></div>
-                    )}
-                  </div>
+                  />
                 ))}
               </div>
             )}
@@ -367,6 +338,30 @@ export const Studio: React.FC = () => {
                   
                   {/* Viewer Controls */}
                   <div className="flex items-center space-x-2">
+                    {/* Engine Selector */}
+                    <div className="flex items-center bg-white/10 rounded-lg p-1">
+                      <button
+                        onClick={() => setViewerEngine('threejs')}
+                        className={`px-3 py-1 text-xs rounded-md transition-all ${
+                          viewerEngine === 'threejs' 
+                            ? 'bg-purple-500 text-white shadow-lg' 
+                            : 'text-white/70 hover:text-white hover:bg-white/10'
+                        }`}
+                      >
+                        Three.js
+                      </button>
+                      <button
+                        onClick={() => setViewerEngine('online3d')}
+                        className={`px-3 py-1 text-xs rounded-md transition-all ${
+                          viewerEngine === 'online3d' 
+                            ? 'bg-green-500 text-white shadow-lg' 
+                            : 'text-white/70 hover:text-white hover:bg-white/10'
+                        }`}
+                      >
+                        Online3D
+                      </button>
+                    </div>
+
                     <button className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-white/70 hover:text-white">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
@@ -391,14 +386,22 @@ export const Studio: React.FC = () => {
               
               {/* 3D Viewport */}
               <div className="flex-1 relative">
-                <ThreeViewer
-                  zipUrl={selected3DModel.zipurl || ''}
-                  isOpen={true}
-                  onClose={() => setSelected3DModel(null)}
-                  modelName={selected3DModel.filename}
-                  imagePath={selected3DModel.name}
-                  onMaterialDataChange={setMaterialData}
-                />
+                {viewerEngine === 'threejs' ? (
+                  <ThreeViewer
+                    modelUrl={selected3DModel.model_3d_url || selected3DModel.zipurl || ''}
+                    isOpen={true}
+                    embedded={true}
+                    onClose={() => setSelected3DModel(null)}
+                    modelName={selected3DModel.target_object || selected3DModel.filename}
+                  />
+                ) : (
+                  <Online3DViewer
+                    zipUrl={selected3DModel.model_3d_url || selected3DModel.zipurl || ''}
+                    isOpen={true}
+                    onClose={() => setSelected3DModel(null)}
+                    modelName={selected3DModel.filename}
+                  />
+                )}
               </div>
             </div>
           ) : (
@@ -409,9 +412,9 @@ export const Studio: React.FC = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-3">Welcome to 3D Studio</h3>
+                <h3 className="text-xl font-semibold text-white mb-3">Welcome to 3D Studio (Supabase)</h3>
                 <p className="text-white/60 leading-relaxed">
-                  Select a model from the library to begin exploring in 3D. 
+                  Select a model from the Supabase library to begin exploring in 3D. 
                   Use your mouse to rotate, zoom, and interact with the models.
                 </p>
                 <div className="mt-6 flex items-center justify-center space-x-6 text-sm text-white/40">
@@ -444,96 +447,29 @@ export const Studio: React.FC = () => {
                     <span className="text-white">{selected3DModel.filename}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-white/60">File size:</span>
-                    <span className="text-white">{formatFileSize(selected3DModel.size)}</span>
-                  </div>
-                  <div className="flex justify-between">
                     <span className="text-white/60">Last updated:</span>
-                    <span className="text-white">{formatDate(selected3DModel.updated)}</span>
+                    <span className="text-white">{formatDate(selected3DModel.updated || selected3DModel.created_at || null)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-white/60">Type:</span>
                     <span className="text-white">{selected3DModel.content_type}</span>
                   </div>
+                  {selected3DModel.target_object && (
+                    <div className="flex justify-between">
+                      <span className="text-white/60">Target Object:</span>
+                      <span className="text-white">{selected3DModel.target_object}</span>
+                    </div>
+                  )}
+                  {selected3DModel.iteration && (
+                    <div className="flex justify-between">
+                      <span className="text-white/60">Iteration:</span>
+                      <span className="text-white">{selected3DModel.iteration}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Material Settings */}
-              {materialData && (materialData.availableMaterials.hasMTL || materialData.availableMaterials.hasTextures) && (
-                <div className="bg-white/5 rounded-lg p-4 mb-4 backdrop-blur border border-white/10">
-                  <h3 className="text-white font-medium mb-3 flex items-center">
-                    <svg className="w-4 h-4 mr-2 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zM21 5H9m12 0v12a4 4 0 01-4 4H9" />
-                    </svg>
-                    Material Settings
-                  </h3>
-                  
-                  <div className="space-y-3">
-                    {/* Full Material Option */}
-                    {materialData.availableMaterials.hasMTL && materialData.availableMaterials.hasTextures && (
-                      <label className="flex items-center space-x-3 cursor-pointer group">
-                        <input
-                          type="radio"
-                          name="materialMode"
-                          value="full"
-                          checked={materialData.materialMode === 'full'}
-                          onChange={(e) => materialData.onMaterialModeChange(e.target.value as 'full' | 'texture-only' | 'basic')}
-                          className="w-4 h-4 text-purple-500 border-white/30 focus:ring-purple-500 focus:ring-2 bg-transparent"
-                        />
-                        <span className="text-white text-sm group-hover:text-purple-300 transition-colors">Full Material + Texture</span>
-                      </label>
-                    )}
-                    
-                    {/* Texture Only Option */}
-                    {materialData.availableMaterials.hasTextures && (
-                      <label className="flex items-center space-x-3 cursor-pointer group">
-                        <input
-                          type="radio"
-                          name="materialMode"
-                          value="texture-only"
-                          checked={materialData.materialMode === 'texture-only'}
-                          onChange={(e) => materialData.onMaterialModeChange(e.target.value as 'full' | 'texture-only' | 'basic')}
-                          className="w-4 h-4 text-purple-500 border-white/30 focus:ring-purple-500 focus:ring-2 bg-transparent"
-                        />
-                        <span className="text-white text-sm group-hover:text-purple-300 transition-colors">
-                          Texture Only ({materialData.availableMaterials.textureCount})
-                        </span>
-                      </label>
-                    )}
-                    
-                    {/* Basic Material Option */}
-                    <label className="flex items-center space-x-3 cursor-pointer group">
-                      <input
-                        type="radio"
-                        name="materialMode"
-                        value="basic"
-                        checked={materialData.materialMode === 'basic'}
-                        onChange={(e) => materialData.onMaterialModeChange(e.target.value as 'full' | 'texture-only' | 'basic')}
-                        className="w-4 h-4 text-purple-500 border-white/30 focus:ring-purple-500 focus:ring-2 bg-transparent"
-                      />
-                      <span className="text-white text-sm group-hover:text-purple-300 transition-colors">Basic Material</span>
-                    </label>
-                  </div>
-                  
-                  {/* Material Info */}
-                  <div className="mt-4 pt-4 border-t border-white/10">
-                    <div className="text-xs text-white/60 space-y-2">
-                      {materialData.availableMaterials.hasMTL && (
-                        <div className="flex items-center">
-                          <div className="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
-                          MTL Material Available
-                        </div>
-                      )}
-                      {materialData.availableMaterials.hasTextures && (
-                        <div className="flex items-center">
-                          <div className="w-2 h-2 bg-blue-400 rounded-full mr-2"></div>
-                          {materialData.availableMaterials.textureCount} Texture(s) Available
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
+
 
               {/* Actions */}
               <div className="space-y-3">
@@ -560,9 +496,9 @@ export const Studio: React.FC = () => {
                   View Original Image
                 </a>
                 
-                {selected3DModel.zipurl && (
+                {(selected3DModel.model_3d_url || selected3DModel.zipurl) && (
                   <a
-                    href={selected3DModel.zipurl}
+                    href={selected3DModel.model_3d_url || selected3DModel.zipurl || ''}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center justify-center w-full px-4 py-3 bg-white/10 backdrop-blur text-white rounded-lg hover:bg-white/20 transition-all border border-white/20"
@@ -591,75 +527,7 @@ export const Studio: React.FC = () => {
         </div>
       </div>
 
-      {/* Image Modal */}
-      {imageModalOpen && selectedImage && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-4xl max-h-[90vh] overflow-hidden">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h3 className="text-lg font-medium text-gray-900">{selectedImage.filename}</h3>
-              <button
-                onClick={() => setImageModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="p-4">
-              <div className="flex flex-col lg:flex-row gap-4">
-                <div className="flex-1">
-                  <img
-                    src={selectedImage.public_url}
-                    alt={selectedImage.filename}
-                    className="w-full h-auto max-h-96 object-contain rounded"
-                  />
-                </div>
-                <div className="lg:w-80 space-y-2">
-                  <div>
-                    <span className="font-medium text-gray-700">Size:</span>
-                    <span className="ml-2 text-gray-600">{formatFileSize(selectedImage.size)}</span>
-                  </div>
-                  <div>
-                    <span className="font-medium text-gray-700">Type:</span>
-                    <span className="ml-2 text-gray-600">{selectedImage.content_type}</span>
-                  </div>
-                  <div>
-                    <span className="font-medium text-gray-700">Updated:</span>
-                    <span className="ml-2 text-gray-600">{formatDate(selectedImage.updated)}</span>
-                  </div>
-                  <div className="pt-2 space-y-2">
-                    <a
-                      href={selectedImage.public_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors mr-2"
-                    >
-                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                      Open Original
-                    </a>
-                    {selectedImage.zipurl && (
-                      <a
-                        href={selectedImage.zipurl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                      >
-                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
-                        </svg>
-                        Download 3D Model
-                      </a>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* Order Modal */}
       {orderModalOpen && selected3DModel && (

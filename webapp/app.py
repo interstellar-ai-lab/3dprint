@@ -37,14 +37,20 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Import studio module
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add the project root directory to Python path
+project_root = os.path.join(os.path.dirname(__file__), '..')
+project_root = os.path.abspath(project_root)
+sys.path.insert(0, project_root)
+
 try:
-    from studio_module import create_studio_manager
+    from studio_module import create_studio_manager, create_supabase_studio_manager
     STUDIO_AVAILABLE = True
+    SUPABASE_STUDIO_AVAILABLE = True
     logger.info("✅ Studio module imported successfully")
 except ImportError as e:
     logger.warning(f"⚠️ Studio module not available: {e}")
     STUDIO_AVAILABLE = False
+    SUPABASE_STUDIO_AVAILABLE = False
 
 app = Flask(__name__)
 CORS(app, resources={
@@ -938,6 +944,124 @@ def get_studio_signed_url(image_path):
         logger.error(f"Error generating signed URL for {image_path}: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/studio/supabase/images')
+def list_supabase_studio_images():
+    """List images from Supabase storage using the generated_images table"""
+    try:
+        if not SUPABASE_STUDIO_AVAILABLE:
+            return jsonify({"error": "Supabase Studio functionality not available"}), 503
+        
+        # Get query parameters
+        max_results = int(request.args.get('max_results', 100))
+        search_query = request.args.get('search', '')
+        
+        # Create Supabase studio manager
+        supabase_manager = create_supabase_studio_manager()
+        
+        # Initialize the manager
+        init_result = supabase_manager.initialize()
+        if not init_result["success"]:
+            return jsonify({"error": f"Supabase initialization failed: {init_result['error']}"}), 503
+        
+        # Search or list images
+        if search_query:
+            result = supabase_manager.search_images(search_query, max_results)
+        else:
+            result = supabase_manager.list_public_images(max_results=max_results)
+        
+        if result["success"]:
+            return jsonify({
+                "success": True,
+                "images": result["images"],
+                "total_count": result["total_count"],
+                "search_query": search_query if search_query else None
+            })
+        else:
+            return jsonify({"error": result["error"]}), 500
+            
+    except Exception as e:
+        logger.error(f"Error listing Supabase studio images: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/studio/supabase/images/<int:image_id>')
+def get_supabase_studio_image_metadata(image_id):
+    """Get metadata for a specific Supabase studio image by ID"""
+    try:
+        if not SUPABASE_STUDIO_AVAILABLE:
+            return jsonify({"error": "Supabase Studio functionality not available"}), 503
+        
+        # Create Supabase studio manager
+        supabase_manager = create_supabase_studio_manager()
+        
+        # Initialize the manager
+        init_result = supabase_manager.initialize()
+        if not init_result["success"]:
+            return jsonify({"error": f"Supabase initialization failed: {init_result['error']}"}), 503
+        
+        # Get image metadata
+        result = supabase_manager.get_image_metadata(image_id=image_id)
+        
+        if result["success"]:
+            return jsonify({
+                "success": True,
+                "metadata": result["metadata"]
+            })
+        else:
+            return jsonify({"error": result["error"]}), 404
+            
+    except Exception as e:
+        logger.error(f"Error getting Supabase studio image metadata: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/studio/supabase/images/insert', methods=['POST'])
+def insert_supabase_studio_image():
+    """Insert a new image record into the generated_images table"""
+    try:
+        if not SUPABASE_STUDIO_AVAILABLE:
+            return jsonify({"error": "Supabase Studio functionality not available"}), 503
+        
+        # Get request data
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        target_object = data.get('target_object')
+        image_url = data.get('image_url')
+        model_3d_url = data.get('model_3d_url')
+        iteration = data.get('iteration')
+        
+        if not target_object or not image_url:
+            return jsonify({"error": "target_object and image_url are required"}), 400
+        
+        # Create Supabase studio manager
+        supabase_manager = create_supabase_studio_manager()
+        
+        # Initialize the manager
+        init_result = supabase_manager.initialize()
+        if not init_result["success"]:
+            return jsonify({"error": f"Supabase initialization failed: {init_result['error']}"}), 503
+        
+        # Insert image
+        result = supabase_manager.insert_image(
+            target_object=target_object,
+            image_url=image_url,
+            model_3d_url=model_3d_url,
+            iteration=iteration
+        )
+        
+        if result["success"]:
+            return jsonify({
+                "success": True,
+                "inserted_id": result["inserted_id"],
+                "record": result["record"]
+            })
+        else:
+            return jsonify({"error": result["error"]}), 500
+            
+    except Exception as e:
+        logger.error(f"Error inserting Supabase studio image: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/studio/zipurl', methods=['POST'])
 def get_studio_zipurl():
     """Get zipurl for a specific image URL from database"""
@@ -1049,6 +1173,56 @@ def proxy_zip_file(image_path):
             
     except Exception as e:
         logger.error(f"Error proxying zip file: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/studio/proxy-file')
+def proxy_file():
+    """Proxy any file download to bypass CORS restrictions"""
+    try:
+        url = request.args.get('url')
+        if not url:
+            return jsonify({"error": "URL parameter is required"}), 400
+        
+        logger.info(f"🔗 Proxying file from: {url}")
+        
+        # Import requests for making HTTP requests
+        import requests
+        
+        # Download the file
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        
+        # Determine content type based on file extension
+        content_type = 'application/octet-stream'  # Default
+        if url.lower().endswith('.glb'):
+            content_type = 'model/gltf-binary'
+        elif url.lower().endswith('.gltf'):
+            content_type = 'model/gltf+json'
+        elif url.lower().endswith('.zip'):
+            content_type = 'application/zip'
+        elif url.lower().endswith(('.jpg', '.jpeg')):
+            content_type = 'image/jpeg'
+        elif url.lower().endswith('.png'):
+            content_type = 'image/png'
+        
+        # Return the file content with appropriate headers
+        return Response(
+            response.content,
+            mimetype=content_type,
+            headers={
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                'Cache-Control': 'public, max-age=3600',  # Cache for 1 hour
+                'Content-Length': str(len(response.content))
+            }
+        )
+        
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error downloading file from {url}: {e}")
+        return jsonify({"error": f"Failed to download file: {str(e)}"}), 500
+    except Exception as e:
+        logger.error(f"Error proxying file: {e}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':

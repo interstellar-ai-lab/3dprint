@@ -67,6 +67,7 @@ def main():
     
     # Job IDs from our previous tests
     job_ids = [
+        "1346037372240101376",
         "1345964238652669952", # dog
         "1345307282845777920",  # From first test
         "1345308348844916736",  # From second test
