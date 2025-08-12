@@ -910,6 +910,34 @@ def get_status(session_id):
         logger.error(f"Error getting status for session {session_id}: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/stop/<session_id>', methods=['POST'])
+def stop_generation(session_id):
+    """Stop a running generation session"""
+    try:
+        if session_id not in active_sessions:
+            return jsonify({"error": "Session not found"}), 404
+        
+        session = active_sessions[session_id]
+        
+        if session["status"] != "running":
+            return jsonify({"error": "Session is not running"}), 400
+        
+        # Mark session as stopped
+        session["status"] = "stopped"
+        session["error"] = "Generation stopped by user"
+        
+        logger.info(f"Stopped generation session {session_id}")
+        
+        return jsonify({
+            "session_id": session_id,
+            "status": "stopped",
+            "message": "Generation stopped successfully"
+        })
+        
+    except Exception as e:
+        logger.error(f"Error stopping generation session {session_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/image/<session_id>/<int:iteration>')
 def get_iteration_image(session_id, iteration):
     """Get image for a specific iteration"""

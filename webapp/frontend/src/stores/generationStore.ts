@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 export interface GenerationSession {
   session_id: string;
-  status: 'running' | 'completed' | 'failed';
+  status: 'running' | 'completed' | 'failed' | 'stopped';
   target_object: string;
   mode: string;
   max_iterations: number;

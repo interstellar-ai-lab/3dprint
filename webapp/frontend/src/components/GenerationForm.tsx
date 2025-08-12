@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { useMutation } from 'react-query';
-import { RocketLaunchIcon } from '@heroicons/react/24/outline';
+import { RocketLaunchIcon, StopIcon } from '@heroicons/react/24/outline';
 import { useGenerationStore } from '../stores/generationStore';
-import { startGeneration } from '../api/generationApi';
+import { startGeneration, stopGeneration } from '../api/generationApi';
 
 export const GenerationForm: React.FC = () => {
   const [targetObject, setTargetObject] = useState('');
   const [mode, setMode] = useState<'quick' | 'deep'>('quick');
-  const { setCurrentSession } = useGenerationStore();
+  const { currentSession, setCurrentSession, updateSession } = useGenerationStore();
 
   const generationMutation = useMutation(startGeneration, {
     onSuccess: (data) => {
@@ -15,6 +15,17 @@ export const GenerationForm: React.FC = () => {
     },
     onError: (error: any) => {
       console.error('Generation failed:', error);
+    },
+  });
+
+  const stopMutation = useMutation(stopGeneration, {
+    onSuccess: (data) => {
+      if (currentSession) {
+        updateSession({ status: 'stopped', error: 'Generation stopped by user' });
+      }
+    },
+    onError: (error: any) => {
+      console.error('Failed to stop generation:', error);
     },
   });
 
@@ -26,6 +37,12 @@ export const GenerationForm: React.FC = () => {
       target_object: targetObject.trim(),
       mode,
     });
+  };
+
+  const handleStop = () => {
+    if (currentSession?.session_id) {
+      stopMutation.mutate(currentSession.session_id);
+    }
   };
 
   return (
@@ -73,24 +90,67 @@ export const GenerationForm: React.FC = () => {
           </p>
         </div>
 
-        {/* Submit Button */}
-        <button
-          type="submit"
-          disabled={generationMutation.isLoading || !targetObject.trim()}
-          className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-4 px-6 rounded-lg font-semibold text-lg hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center space-x-2"
-        >
-          <RocketLaunchIcon className="w-6 h-6" />
-          <span>
-            {generationMutation.isLoading ? 'Starting Generation...' : '🚀 Start Generation'}
-          </span>
-        </button>
+        {/* Action Buttons */}
+        <div className="flex space-x-4">
+          {/* Start/Stop Button */}
+          {currentSession?.status === 'running' ? (
+            <button
+              type="button"
+              onClick={handleStop}
+              disabled={stopMutation.isLoading}
+              className="flex-1 bg-gradient-to-r from-red-600 to-red-700 text-white py-4 px-6 rounded-lg font-semibold text-lg hover:from-red-700 hover:to-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center space-x-2"
+            >
+              <StopIcon className="w-6 h-6" />
+              <span>
+                {stopMutation.isLoading ? 'Stopping...' : 'Stop Generation'}
+              </span>
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={generationMutation.isLoading || !targetObject.trim()}
+              className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 text-white py-4 px-6 rounded-lg font-semibold text-lg hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center space-x-2"
+            >
+              <RocketLaunchIcon className="w-6 h-6" />
+              <span>
+                {generationMutation.isLoading ? 'Starting Generation...' : '🚀 Start Generation'}
+              </span>
+            </button>
+          )}
+        </div>
       </form>
 
+      {/* Status Display */}
+      {currentSession && (
+        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-blue-800 font-medium">
+                Generation Status: {currentSession.status.charAt(0).toUpperCase() + currentSession.status.slice(1)}
+              </p>
+              {currentSession.status === 'running' && (
+                <p className="text-blue-600 text-sm">
+                  Iteration {currentSession.current_iteration} of {currentSession.max_iterations}
+                </p>
+              )}
+              {currentSession.error && (
+                <p className="text-red-600 text-sm mt-1">
+                  {currentSession.error}
+                </p>
+              )}
+            </div>
+            {currentSession.status === 'running' && (
+              <div className="w-4 h-4 bg-blue-500 rounded-full animate-pulse"></div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Error Display */}
-      {generationMutation.isError && (
+      {(generationMutation.isError || stopMutation.isError) && (
         <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-red-700">
-            Error: {generationMutation.error?.message || 'Failed to start generation'}
+            Error: {(generationMutation.error || stopMutation.error)?.message || 'Operation failed'}
           </p>
         </div>
       )}
