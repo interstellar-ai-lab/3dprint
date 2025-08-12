@@ -108,10 +108,12 @@ export const TeamSection: React.FC = () => {
               Join us in revolutionizing how creative professionals create and iterate on 3D assets.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button className="bg-white text-purple-600 px-6 py-3 rounded-full font-semibold hover:bg-gray-100 transition-all duration-300">
-                Contact Us
+              <button className="bg-white text-purple-600 px-6 py-3 rounded-full font-semibold hover:bg-gray-100 transition-all duration-300"
+                  onClick={() => window.open('https://calendar.app.google/mh5rhYuC3D2fec4x9', '_blank')}>
+                Schedule Demo
               </button>
-              <button className="border-2 border-white text-white px-6 py-3 rounded-full font-semibold hover:bg-white hover:text-purple-600 transition-all duration-300">
+              <button className="border-2 border-white text-white px-6 py-3 rounded-full font-semibold hover:bg-white hover:text-purple-600 transition-all duration-300"
+                  onClick={() => window.open('https://calendar.app.google/mh5rhYuC3D2fec4x9', '_blank')}>
                 Join Waitlist
               </button>
             </div>

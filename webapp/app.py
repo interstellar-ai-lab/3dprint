@@ -145,6 +145,39 @@ def upload_image_to_supabase(image_data: bytes, filename: str, content_type: str
         logger.error(f"❌ Error uploading file to Supabase: {e}")
         return None
 
+def clean_glb_asset_properties(glb_data: bytes) -> bytes:
+    """Remove asset properties (generator and version) from GLB file data"""
+    try:
+        from pygltflib import GLTF2
+        import io
+        
+        # Load GLB data from bytes
+        gltf = GLTF2().load_from_bytes(glb_data)
+        
+        # Remove asset properties
+        if hasattr(gltf, 'asset') and gltf.asset:
+            if hasattr(gltf.asset, 'generator'):
+                gltf.asset.generator = None
+            if hasattr(gltf.asset, 'version'):
+                gltf.asset.version = None
+        
+        # Save back to bytes
+        output_buffer = io.BytesIO()
+        gltf.save_to_bytes(output_buffer)
+        cleaned_data = output_buffer.getvalue()
+        
+        logger.info("✅ Removed asset properties from GLB file")
+        return cleaned_data
+        
+    except ImportError:
+        logger.warning("⚠️ pygltflib not installed. Install with: pip install pygltflib")
+        logger.info("📝 Returning original GLB data without cleaning")
+        return glb_data
+    except Exception as e:
+        logger.error(f"❌ Error cleaning GLB asset properties: {e}")
+        logger.info("📝 Returning original GLB data due to error")
+        return glb_data
+
 def insert_image_record(target_object: str, image_url: str, iteration: int = None, model_3d_url: str = None) -> Optional[int]:
     """Insert image record into generated_images table"""
     if not SUPABASE_AVAILABLE or not supabase_client:
@@ -1013,10 +1046,13 @@ def generate_3d():
                                 with open(model_path, 'rb') as f:
                                     glb_data = f.read()
                                 
+                                # Clean asset properties from GLB before upload
+                                cleaned_glb_data = clean_glb_asset_properties(glb_data)
+                                
                                 # Upload to Supabase 3D files bucket
                                 glb_filename = f"{target_object.replace(' ', '_')}_{iteration}_{timestamp}.glb"
                                 glb_supabase_url = upload_image_to_supabase(
-                                    glb_data, 
+                                    cleaned_glb_data, 
                                     glb_filename, 
                                     content_type="model/gltf-binary",
                                     bucket_name="generated-3d-files"

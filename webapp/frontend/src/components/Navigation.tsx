@@ -83,12 +83,14 @@ export const Navigation: React.FC = () => {
             >
               Studio
             </button>
-            <button className={`px-4 py-2 rounded-full font-medium transition-all ${
-              isScrolled 
-                ? 'bg-purple-600 text-white hover:bg-purple-700' 
-                : 'bg-white text-purple-600 hover:bg-gray-100'
-            }`}>
-              Contact
+            <button 
+              onClick={() => window.open('https://calendar.app.google/mh5rhYuC3D2fec4x9', '_blank')}
+              className={`px-4 py-2 rounded-full font-medium transition-all ${
+                isScrolled 
+                  ? 'bg-purple-600 text-white hover:bg-purple-700' 
+                  : 'bg-white text-purple-600 hover:bg-gray-100'
+              }`}>
+              Schedule Demo
             </button>
           </div>
 
@@ -148,8 +150,10 @@ export const Navigation: React.FC = () => {
               >
                 Studio
               </button>
-              <button className="bg-purple-600 text-white px-4 py-2 rounded-full font-medium hover:bg-purple-700">
-                Contact
+              <button 
+                onClick={() => window.open('https://calendar.app.google/mh5rhYuC3D2fec4x9', '_blank')}
+                className="bg-purple-600 text-white px-4 py-2 rounded-full font-medium hover:bg-purple-700">
+                Schedule Demo
               </button>
             </div>
           </div>

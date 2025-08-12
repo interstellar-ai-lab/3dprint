@@ -12,11 +12,11 @@ def crop_multiview_image(image: Image.Image) -> dict:
     # Top left: front view
     front_view = image.crop((0, 0, half_width, half_height))
     # Top right: left view  
-    left_view = image.crop((half_width, 0, width, half_height))
+    right_view = image.crop((half_width, 0, width, half_height))
     # Bottom left: back view
-    back_view = image.crop((0, half_height, half_width, height))
+    left_view = image.crop((0, half_height, half_width, height))
     # Bottom right: right view
-    right_view = image.crop((half_width, half_height, width, height))
+    back_view = image.crop((half_width, half_height, width, height))
     
     return {
         "front": front_view,
@@ -87,5 +87,5 @@ def display_cropped_views(image_path: str):
 
 if __name__ == "__main__":
     # Test with the computer.png image
-    image_path = "/Users/Interstellar/Downloads/computer.png"
+    image_path = "/Users/Interstellar/Desktop/cat.png"
     display_cropped_views(image_path)

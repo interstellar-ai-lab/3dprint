@@ -5,8 +5,16 @@ import sys
 from PIL import Image
 import io
 import base64
+from dotenv import load_dotenv
 
-API_KEY = "tsk_IgxudylWsvXGWs6oizkypsu2AU1GsWzQac8gs7gcRrD"
+# Load environment variables from .env file
+load_dotenv()
+
+# Get API key from environment variable
+API_KEY = os.getenv("TRIPO_API_KEY")
+if not API_KEY:
+    raise ValueError("TRIPO_API_KEY not found in environment variables. Please set it in your .env file.")
+
 BASE = "https://api.tripo3d.ai/v2/openapi"
 HDRS = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
 
@@ -17,7 +25,7 @@ def download_image(url: str) -> Image.Image:
     response.raise_for_status()
     return Image.open(io.BytesIO(response.content))
 
-def crop_multiview_image(image: Image.Image) -> dict:
+def  crop_multiview_image(image: Image.Image) -> dict:
     """Crop multiview image into 4 separate views"""
     width, height = image.size
     half_width = width // 2
@@ -71,7 +79,7 @@ def upload_image(image: Image.Image, filename: str) -> str:
     print(f"Uploaded {filename}, got token: {image_token}")
     return image_token
 
-def create_multiview_task(views: dict, model_version="v2.5-20250123"):
+def create_multiview_task(views: dict, model_version="v2.5-20250123", texture=True, pbr=True):
     """Create multiview-to-model task"""
     # Upload each view to get image tokens
     image_tokens = {}
@@ -83,6 +91,8 @@ def create_multiview_task(views: dict, model_version="v2.5-20250123"):
     payload = {
         "type": "multiview_to_model",
         "model_version": model_version,
+        "texture": texture,
+        "pbr": pbr,
         "files": [
             {
                 "type": "png",
@@ -147,7 +157,7 @@ def save_cropped_views(views: dict, output_dir: str = "cropped_views"):
 
 if __name__ == "__main__":
     # Download the multiview image
-    multiview_url = "https://nzkkbpekateqhygeghmw.supabase.co/storage/v1/object/public/generated-images-bucket/computer_1_20250811_143900.png"
+    multiview_url = "https://nzkkbpekateqhygeghmw.supabase.co/storage/v1/object/public/generated-images-bucket/cat_3_20250812_160917.png"
     
     try:
         # Download and process the image
@@ -161,8 +171,11 @@ if __name__ == "__main__":
         # Save cropped views for inspection
         save_cropped_views(views)
         
-        # Submit multiview-to-model task
-        task_id = create_multiview_task(views)
+        # Submit multiview-to-model task with texture and PBR options
+        # texture=True: Enable texturing (default: True)
+        # pbr=True: Enable PBR materials (default: True)
+        # If pbr=True, texture is ignored and used as True
+        task_id = create_multiview_task(views, texture=True, pbr=True)
         print("Task ID:", task_id)
         
         # Poll for completion
