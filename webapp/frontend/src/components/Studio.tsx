@@ -46,8 +46,12 @@ export const Studio: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
+  const [pendingJobs, setPendingJobs] = useState<Set<number>>(new Set());
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
 
   const [selected3DModel, setSelected3DModel] = useState<StudioImage | null>(null);
+
+
   const [orderModalOpen, setOrderModalOpen] = useState(false);
   const [viewerEngine, setViewerEngine] = useState<'threejs' | 'online3d'>('threejs');
 
@@ -69,6 +73,49 @@ export const Studio: React.FC = () => {
       
       if (data.success) {
         setImages(data.images);
+        
+        // Identify pending jobs (images without 3D models but with recent timestamps)
+        const now = new Date();
+        const pendingJobIds: number[] = [];
+        const completedJobIds: number[] = [];
+        
+        data.images.forEach((img: StudioImage) => {
+          if (!img.has_3d_model && img.created_at) {
+            const createdTime = new Date(img.created_at);
+            const timeDiff = now.getTime() - createdTime.getTime();
+            const hoursDiff = timeDiff / (1000 * 60 * 60);
+            
+            // If image was created in the last 2 hours and has no 3D model, it might be pending
+            if (hoursDiff < 2) {
+              pendingJobIds.push(img.id);
+            }
+          } else if (img.has_3d_model && img.created_at) {
+            // Check if this job was previously pending and is now completed
+            const createdTime = new Date(img.created_at);
+            const timeDiff = now.getTime() - createdTime.getTime();
+            const hoursDiff = timeDiff / (1000 * 60 * 60);
+            
+            if (hoursDiff < 2) {
+              completedJobIds.push(img.id);
+            }
+          }
+        });
+        
+        if (pendingJobIds.length > 0) {
+          console.log('🔍 Found potential pending jobs:', pendingJobIds);
+          setPendingJobs(new Set(pendingJobIds));
+        }
+        
+        if (completedJobIds.length > 0) {
+          console.log('✅ Found newly completed jobs:', completedJobIds);
+          // Remove completed jobs from pending set
+          setPendingJobs(prev => {
+            const newSet = new Set(Array.from(prev));
+            completedJobIds.forEach(id => newSet.delete(id));
+            return newSet;
+          });
+        }
+        
         setError(null);
       } else {
         setError(data.error || 'Failed to fetch images');
@@ -86,6 +133,57 @@ export const Studio: React.FC = () => {
     // Bucket info is not needed for Supabase storage
   };
 
+  // Check status of pending 3D generation jobs
+  const checkPendingJobs = async () => {
+    if (pendingJobs.size === 0) return;
+
+    console.log('🔄 Checking pending jobs:', Array.from(pendingJobs));
+    
+    const completedJobs: number[] = [];
+    
+    for (const recordId of Array.from(pendingJobs)) {
+      try {
+        const response = await fetch(`${API_BASE}/api/generation-status/${recordId}`);
+        if (response.ok) {
+          const status = await response.json();
+          
+          if (status.status === 'completed') {
+            console.log('✅ Job completed:', recordId, status['3d_url']);
+            completedJobs.push(recordId);
+            
+            // Update the image in the list with 3D model URL
+            setImages(prevImages => 
+              prevImages.map(img => 
+                img.id === recordId 
+                  ? { 
+                      ...img, 
+                      model_3d_url: status['3d_url'],
+                      zipurl: status['3d_url'],
+                      has_3d_model: true 
+                    }
+                  : img
+              )
+            );
+          } else if (status.status === 'failed' || status.status === 'cancelled' || status.status === 'timeout') {
+            console.log('❌ Job failed:', recordId, status.error_message);
+            completedJobs.push(recordId);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking job status:', error);
+      }
+    }
+    
+    // Remove completed jobs from pending set
+    if (completedJobs.length > 0) {
+      setPendingJobs(prev => {
+        const newSet = new Set(prev);
+        completedJobs.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+    }
+  };
+
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
@@ -95,6 +193,60 @@ export const Studio: React.FC = () => {
     
     loadData();
   }, []);
+
+  // Start polling for pending jobs and refresh image list
+  useEffect(() => {
+    if (pendingJobs.size > 0) {
+      // Poll every 10 seconds for pending jobs
+      const interval = setInterval(async () => {
+        await checkPendingJobs();
+        // Also refresh the entire image list to get latest data
+        await fetchImages(searchQuery);
+      }, 10000);
+      setPollingInterval(interval);
+      
+      // Also check immediately
+      checkPendingJobs();
+      
+      return () => {
+        if (interval) clearInterval(interval);
+      };
+    } else {
+      // Clear interval if no pending jobs
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+        setPollingInterval(null);
+      }
+    }
+  }, [pendingJobs, searchQuery]);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+    };
+  }, [pollingInterval]);
+
+  // Always refresh image list periodically when there are pending jobs
+  useEffect(() => {
+    let refreshInterval: NodeJS.Timeout | null = null;
+    
+    if (pendingJobs.size > 0) {
+      // Refresh image list every 30 seconds to get latest data
+      refreshInterval = setInterval(async () => {
+        console.log('🔄 Refreshing image list to check for completed jobs...');
+        await fetchImages(searchQuery);
+      }, 30000);
+    }
+    
+    return () => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+    };
+  }, [pendingJobs, searchQuery]);
 
   // Auto-select the first 3D model when images are loaded
   useEffect(() => {
@@ -134,6 +286,20 @@ export const Studio: React.FC = () => {
     }
     setSelected3DModel(image);
   };
+
+  // Function to add a job to pending monitoring (can be called from other components)
+  const addPendingJob = (recordId: number) => {
+    setPendingJobs(prev => new Set([...Array.from(prev), recordId]));
+    console.log('➕ Added job to monitoring:', recordId);
+  };
+
+  // Expose the function globally for other components to use
+  React.useEffect(() => {
+    (window as any).addPendingJob = addPendingJob;
+    return () => {
+      delete (window as any).addPendingJob;
+    };
+  }, []);
 
   const handleOrderClick = (event?: React.MouseEvent) => {
     if (event) {
@@ -243,7 +409,15 @@ export const Studio: React.FC = () => {
           <div className="p-4">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-white">Model Library</h2>
-              <div className="text-sm text-white/60">{images.length} models</div>
+              <div className="flex items-center space-x-2">
+                {pendingJobs.size > 0 && (
+                  <div className="flex items-center text-yellow-400 text-sm">
+                    <div className="w-2 h-2 bg-yellow-400 rounded-full mr-2 animate-pulse"></div>
+                    Monitoring {pendingJobs.size} job{pendingJobs.size > 1 ? 's' : ''}
+                  </div>
+                )}
+                <div className="text-sm text-white/60">{images.length} models</div>
+              </div>
             </div>
 
             {error && (

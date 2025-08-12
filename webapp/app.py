@@ -99,6 +99,28 @@ except ImportError:
     SUPABASE_AVAILABLE = False
     logger.warning("⚠️ Supabase library not installed. Install with: pip install supabase")
 
+def ensure_database_schema():
+    """Ensure the database table has the required columns for status tracking"""
+    if not SUPABASE_AVAILABLE or not supabase_client:
+        logger.warning("⚠️ Supabase not available, skipping schema check")
+        return
+    
+    try:
+        # Try to query the table to see if it exists and has the required columns
+        result = supabase_client.table('generated_images').select('id, status, task_id, created_at, updated_at, error_message').limit(1).execute()
+        logger.info("✅ Database schema check passed - required columns exist")
+    except Exception as e:
+        logger.warning(f"⚠️ Database schema may need updating: {e}")
+        logger.info("ℹ️ Please ensure your generated_images table has these columns:")
+        logger.info("  - status (text): pending, processing, completed, failed, cancelled, timeout")
+        logger.info("  - task_id (text): Tripo API task ID")
+        logger.info("  - created_at (timestamp): record creation time")
+        logger.info("  - updated_at (timestamp): last update time")
+        logger.info("  - error_message (text): error details for failed jobs")
+
+# Run schema check on startup
+ensure_database_schema()
+
 async def download_image_to_pil(image_url: str) -> Optional[Image.Image]:
     """Download image from URL and convert to PIL Image"""
     try:
@@ -162,9 +184,18 @@ def clean_glb_asset_properties(glb_data: bytes) -> bytes:
                 gltf.asset.version = None
         
         # Save back to bytes
-        output_buffer = io.BytesIO()
-        gltf.save_to_bytes(output_buffer)
-        cleaned_data = output_buffer.getvalue()
+        cleaned_data = gltf.save_to_bytes()
+        
+        # Ensure we have bytes data
+        if not isinstance(cleaned_data, bytes):
+            logger.warning(f"⚠️ save_to_bytes() returned {type(cleaned_data)}, converting to bytes")
+            if isinstance(cleaned_data, list):
+                cleaned_data = bytes(cleaned_data)
+            elif isinstance(cleaned_data, str):
+                cleaned_data = cleaned_data.encode('utf-8')
+            else:
+                logger.error(f"❌ Unexpected data type from save_to_bytes(): {type(cleaned_data)}")
+                return glb_data  # Return original data
         
         logger.info("✅ Removed asset properties from GLB file")
         return cleaned_data
@@ -189,7 +220,10 @@ def insert_image_record(target_object: str, image_url: str, iteration: int = Non
         data = {
             "target_object": target_object,
             "image_url": image_url,
-            "iteration": iteration
+            "iteration": iteration,
+            "status": "running",  # Add initial status
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
         }
         
         # Add 3D model URL if provided
@@ -954,7 +988,7 @@ def list_sessions():
 
 @app.route('/api/generate-3d', methods=['POST'])
 def generate_3d():
-    """Generate 3D model from image using Tripo API"""
+    """Submit 3D generation job and return immediately"""
     try:
         data = request.get_json()
         session_id = data.get('sessionId')
@@ -995,108 +1029,268 @@ def generate_3d():
         if not supabase_url:
             return jsonify({"error": "Failed to upload image to Supabase"}), 500
         
-        # Insert record into database
+        # Insert record into database with pending status
         record_id = insert_image_record(target_object, supabase_url, iteration)
         if not record_id:
             return jsonify({"error": "Failed to insert database record"}), 500
         
-        # Generate 3D model using Tripo API
-        try:
-            # Import the Tripo functions
-            import sys
-            import os
-            sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-            
-            from test_tripo_multiview_to_3d import create_multiview_task, get_task, download, crop_multiview_image
-            
-            # Load the image and crop it into 4 views
-            from PIL import Image
-            import io
-            
-            # Load the image
-            image = Image.open(io.BytesIO(image_data))
-            
-            # Crop the image into 4 views (front, right, left, back)
-            views = crop_multiview_image(image)
-            
-            # Submit to Tripo API
-            task_id = create_multiview_task(views)
-            
-            # Poll for completion
-            max_attempts = 60  # 10 minutes with 10-second intervals
-            for attempt in range(max_attempts):
-                info = get_task(task_id)
-                if info.get("code") != 0:
-                    return jsonify({"error": f"Tripo API error: {info}"}), 500
-                
-                status = info["data"]["status"]
-                if status in ("success", "succeeded", "SUCCESS"):
-                    out = info["data"]["output"]
-                    model_url = out.get("pbr_model") or out.get("model")
-                    if model_url:
-                        # Download the model
-                        model_filename = f"tripo_model_{session_id}_{iteration}.glb"
-                        model_path = download(model_url, model_filename)
-                        
-                        # Upload GLB file to Supabase 3D files bucket
-                        glb_supabase_url = None
-                        if SUPABASE_AVAILABLE and supabase_client:
-                            try:
-                                # Read the downloaded GLB file
-                                with open(model_path, 'rb') as f:
-                                    glb_data = f.read()
-                                
-                                # Clean asset properties from GLB before upload
-                                cleaned_glb_data = clean_glb_asset_properties(glb_data)
-                                
-                                # Upload to Supabase 3D files bucket
-                                glb_filename = f"{target_object.replace(' ', '_')}_{iteration}_{timestamp}.glb"
-                                glb_supabase_url = upload_image_to_supabase(
-                                    cleaned_glb_data, 
-                                    glb_filename, 
-                                    content_type="model/gltf-binary",
-                                    bucket_name="generated-3d-files"
-                                )
-                                
-                                if glb_supabase_url:
-                                    # Update the database record with Supabase 3D model URL
-                                    supabase_client.table('generated_images').update({
-                                        "3d_url": glb_supabase_url
-                                    }).eq('id', record_id).execute()
-                                    logger.info(f"✅ Uploaded GLB to Supabase: {glb_supabase_url}")
-                                else:
-                                    logger.error("❌ Failed to upload GLB to Supabase")
-                                    
-                            except Exception as e:
-                                logger.error(f"Error uploading GLB to Supabase: {e}")
-                        
-                        # Clean up local file
-                        try:
-                            os.remove(model_path)
-                        except:
-                            pass
-                        
-                        return jsonify({
-                            "success": True,
-                            "model_url": glb_supabase_url or model_path,
-                            "supabase_record_id": record_id
-                        })
-                    else:
-                        return jsonify({"error": "No model URL in Tripo response"}), 500
-                elif status in ("failed", "error"):
-                    return jsonify({"error": f"Tripo task failed: {info}"}), 500
-                
-                import time
-                time.sleep(10)  # Wait 10 seconds before next poll
-            
-            return jsonify({"error": "Timeout waiting for 3D generation"}), 408
-            
-        except Exception as e:
-            logger.error(f"Error generating 3D model: {e}")
-            return jsonify({"error": f"3D generation failed: {str(e)}"}), 500
+        # Update record with pending status
+        if SUPABASE_AVAILABLE and supabase_client:
+            supabase_client.table('generated_images').update({
+                "status": "running",
+                "task_id": None,  # Will be set when task is created
+                "updated_at": datetime.now().isoformat()
+            }).eq('id', record_id).execute()
+        
+        # Start background processing
+        thread = threading.Thread(
+            target=process_3d_generation_background,
+            args=(session_id, iteration, target_object, image_data, record_id, timestamp)
+        )
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            "success": True,
+            "record_id": record_id,
+            "status": "running",
+            "status_url": f"/api/generation-status/{record_id}",
+            "message": "3D generation job submitted successfully"
+        })
         
     except Exception as e:
         logger.error(f"Error in generate-3d endpoint: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
+def process_3d_generation_background(session_id, iteration, target_object, image_data, record_id, timestamp):
+    """Background function to process 3D generation"""
+    try:
+        # Import the Tripo functions
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+        
+        from test_tripo_multiview_to_3d import create_multiview_task, get_task, download, crop_multiview_image
+        
+        # Load the image and crop it into 4 views
+        from PIL import Image
+        import io
+        
+        # Load the image
+        image = Image.open(io.BytesIO(image_data))
+        
+        # Crop the image into 4 views (front, right, left, back)
+        views = crop_multiview_image(image)
+        
+        # Submit to Tripo API
+        task_id = create_multiview_task(views)
+        
+        # Update record with task_id and processing status
+        if SUPABASE_AVAILABLE and supabase_client:
+            supabase_client.table('generated_images').update({
+                "status": "running",
+                "task_id": task_id,
+                "updated_at": datetime.now().isoformat()
+            }).eq('id', record_id).execute()
+        
+        logger.info(f"✅ Submitted Tripo task {task_id} for record {record_id}")
+        
+        # Poll for completion
+        max_attempts = 60  # 10 minutes with 10-second intervals
+        for attempt in range(max_attempts):
+            try:
+                info = get_task(task_id)
+                if info.get("code") != 0:
+                    error_msg = f"Tripo API error: {info}"
+                    logger.error(f"❌ {error_msg}")
+                    update_job_status(record_id, "failed", error_msg)
+                    return
+                
+                status = info["data"]["status"]
+                logger.info(f"Task {task_id} status: {status} (attempt {attempt + 1}/{max_attempts})")
+                
+                # Handle finalized statuses
+                if status == "success":
+                    # Process successful completion
+                    process_successful_job(info, task_id, session_id, iteration, target_object, record_id, timestamp)
+                    return
+                elif status == "failed":
+                    error_msg = f"Tripo task failed: {info}"
+                    logger.error(f"❌ {error_msg}")
+                    update_job_status(record_id, "failed", error_msg)
+                    return
+                elif status == "cancelled":
+                    error_msg = "Tripo task was cancelled"
+                    logger.warning(f"⚠️ {error_msg}")
+                    update_job_status(record_id, "cancelled", error_msg)
+                    return
+                elif status == "unknown":
+                    error_msg = "Tripo task status unknown - system level issue"
+                    logger.error(f"❌ {error_msg}")
+                    update_job_status(record_id, "failed", error_msg)
+                    return
+                
+                # Handle ongoing statuses
+                elif status in ("queued", "running"):
+                    # Continue polling
+                    pass
+                else:
+                    # Unknown status, log and continue
+                    logger.warning(f"⚠️ Unknown status '{status}' for task {task_id}")
+                
+                import time
+                time.sleep(10)  # Wait 10 seconds before next poll
+                
+            except Exception as e:
+                logger.error(f"Error polling task {task_id}: {e}")
+                time.sleep(10)
+        
+        # Handle timeout
+        error_msg = f"Timeout waiting for 3D generation after {max_attempts * 10} seconds"
+        logger.error(f"❌ {error_msg}")
+        update_job_status(record_id, "timeout", error_msg)
+        
+    except Exception as e:
+        error_msg = f"Error in background 3D generation: {str(e)}"
+        logger.error(f"❌ {error_msg}")
+        update_job_status(record_id, "failed", error_msg)
+
+def process_successful_job(info, task_id, session_id, iteration, target_object, record_id, timestamp):
+    """Process a successfully completed 3D generation job"""
+    try:
+        # Import required functions
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+        
+        from test_tripo_multiview_to_3d import download
+        
+        out = info["data"]["output"]
+        model_url = out.get("pbr_model") or out.get("model")
+        
+        if not model_url:
+            error_msg = "No model URL in Tripo response"
+            logger.error(f"❌ {error_msg}")
+            update_job_status(record_id, "failed", error_msg)
+            return
+        
+        # Download the model
+        model_filename = f"tripo_model_{session_id}_{iteration}.glb"
+        model_path = download(model_url, model_filename)
+        
+        # Upload GLB file to Supabase 3D files bucket
+        glb_supabase_url = None
+        if SUPABASE_AVAILABLE and supabase_client:
+            try:
+                # Read the downloaded GLB file
+                with open(model_path, 'rb') as f:
+                    glb_data = f.read()
+                
+                # Clean asset properties from GLB before upload
+                cleaned_glb_data = clean_glb_asset_properties(glb_data)
+                
+                # Debug: Check data type
+                logger.info(f"📝 GLB data type: {type(cleaned_glb_data)}, length: {len(cleaned_glb_data) if hasattr(cleaned_glb_data, '__len__') else 'unknown'}")
+                
+                # Ensure we have valid bytes data for upload
+                if not isinstance(cleaned_glb_data, bytes):
+                    logger.warning("⚠️ Using original GLB data due to cleaning issues")
+                    cleaned_glb_data = glb_data
+                
+                # Upload to Supabase 3D files bucket
+                glb_filename = f"{target_object.replace(' ', '_')}_{iteration}_{timestamp}.glb"
+                glb_supabase_url = upload_image_to_supabase(
+                    cleaned_glb_data, 
+                    glb_filename, 
+                    content_type="model/gltf-binary",
+                    bucket_name="generated-3d-files"
+                )
+                
+                if glb_supabase_url:
+                    # Update the database record with completed status and 3D model URL
+                    supabase_client.table('generated_images').update({
+                        "status": "completed",
+                        "3d_url": glb_supabase_url,
+                        "updated_at": datetime.now().isoformat()
+                    }).eq('id', record_id).execute()
+                    logger.info(f"✅ Uploaded GLB to Supabase: {glb_supabase_url}")
+                else:
+                    logger.error("❌ Failed to upload GLB to Supabase")
+                    update_job_status(record_id, "failed", "Failed to upload GLB to Supabase")
+                    return
+                    
+            except Exception as e:
+                logger.error(f"Error uploading GLB to Supabase: {e}")
+                update_job_status(record_id, "failed", f"Error uploading GLB: {str(e)}")
+                return
+        
+        # Clean up local file
+        try:
+            os.remove(model_path)
+        except:
+            pass
+        
+        logger.info(f"✅ Successfully completed 3D generation for record {record_id}")
+        
+    except Exception as e:
+        error_msg = f"Error processing successful job: {str(e)}"
+        logger.error(f"❌ {error_msg}")
+        update_job_status(record_id, "failed", error_msg)
+
+def update_job_status(record_id, status, error_message=None):
+    """Update job status in database"""
+    try:
+        if SUPABASE_AVAILABLE and supabase_client:
+            update_data = {
+                "status": status,
+                "updated_at": datetime.now().isoformat()
+            }
+            if error_message:
+                update_data["error_message"] = error_message
+            
+            supabase_client.table('generated_images').update(update_data).eq('id', record_id).execute()
+            logger.info(f"✅ Updated record {record_id} status to: {status}")
+    except Exception as e:
+        logger.error(f"Error updating job status: {e}")
+
+@app.route('/api/generation-status/<record_id>')
+def get_generation_status(record_id):
+    """Check status of a 3D generation job"""
+    try:
+        if not SUPABASE_AVAILABLE or not supabase_client:
+            return jsonify({"error": "Database not available"}), 500
+        
+        result = supabase_client.table('generated_images').select('*').eq('id', record_id).execute()
+        
+        if not result.data:
+            return jsonify({"error": "Record not found"}), 404
+        
+        record = result.data[0]
+        
+        # Return status information
+        response = {
+            "record_id": record_id,
+            "status": record.get("status", "unknown"),
+            "task_id": record.get("task_id"),
+            "created_at": record.get("created_at"),
+            "updated_at": record.get("updated_at"),
+            "target_object": record.get("target_object"),
+            "iteration": record.get("iteration")
+        }
+        
+        # Add result data if completed
+        if record.get("status") == "completed":
+            response["3d_url"] = record.get("3d_url")
+            response["image_url"] = record.get("image_url")
+        
+        # Add error information if failed
+        if record.get("status") in ["failed", "cancelled", "timeout"]:
+            response["error_message"] = record.get("error_message")
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        logger.error(f"Error getting generation status: {e}")
         return jsonify({"error": "Internal server error"}), 500
 
 @app.route('/api/health')

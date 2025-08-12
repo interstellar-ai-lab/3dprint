@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MagnifyingGlassIcon, CubeIcon } from '@heroicons/react/24/outline';
 import { useNavigate } from 'react-router-dom';
 
@@ -18,7 +18,19 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ imageUrl, originalUrl, ses
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGenerating3D, setIsGenerating3D] = useState(false);
   const [threeDModelUrl, setThreeDModelUrl] = useState<string | null>(null);
+  const [generationStatus, setGenerationStatus] = useState<'idle' | 'running' | 'completed' | 'failed'>('idle');
+  const [recordId, setRecordId] = useState<number | null>(null);
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
   const navigate = useNavigate();
+
+  // Cleanup polling interval on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+    };
+  }, [pollingInterval]);
 
   const handleImageLoad = () => {
     setIsLoading(false);
@@ -29,6 +41,57 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ imageUrl, originalUrl, ses
     console.error('Image load error:', error);
     setIsLoading(false);
     setHasError(true);
+  };
+
+  const pollJobStatus = async (recordId: number) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/generation-status/${recordId}`);
+      if (response.ok) {
+        const status = await response.json();
+        console.log('Polling status for record', recordId, ':', status.status);
+        
+        switch (status.status) {
+          case 'completed':
+            console.log('✅ 3D generation completed!');
+            setGenerationStatus('completed');
+            setThreeDModelUrl(status['3d_url']);
+            setIsGenerating3D(false);
+            // Clear polling interval
+            if (pollingInterval) {
+              clearInterval(pollingInterval);
+              setPollingInterval(null);
+            }
+            break;
+            
+          case 'failed':
+          case 'cancelled':
+          case 'timeout':
+            console.log('❌ 3D generation failed:', status.error_message);
+            setGenerationStatus('failed');
+            setIsGenerating3D(false);
+            // Clear polling interval
+            if (pollingInterval) {
+              clearInterval(pollingInterval);
+              setPollingInterval(null);
+            }
+            break;
+            
+          case 'running':
+            console.log('🔄 3D generation still running...');
+            setGenerationStatus('running');
+            // Continue polling
+            break;
+            
+          default:
+            console.log('Unknown status:', status.status);
+            break;
+        }
+      } else {
+        console.error('Failed to get job status');
+      }
+    } catch (error) {
+      console.error('Error polling job status:', error);
+    }
   };
 
   const handleGenerate3D = async () => {
@@ -43,8 +106,15 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ imageUrl, originalUrl, ses
       return;
     }
 
-    // Otherwise, generate new 3D model
+    // If already generating, don't start another job
+    if (isGenerating3D) {
+      return;
+    }
+
+    // Start new 3D generation job
     setIsGenerating3D(true);
+    setGenerationStatus('running');
+    
     try {
       const response = await fetch(`${API_BASE_URL}/api/generate-3d`, {
         method: 'POST',
@@ -61,17 +131,32 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ imageUrl, originalUrl, ses
 
       if (response.ok) {
         const data = await response.json();
-        if (data.model_url) {
-          setThreeDModelUrl(data.model_url);
-          // Don't automatically open studio - let user click "View 3D in Studio" button
+        if (data.success && data.record_id) {
+          setRecordId(data.record_id);
+          
+          // Start polling for status updates
+          const interval = setInterval(() => {
+            pollJobStatus(data.record_id);
+          }, 10000); // Poll every 10 seconds
+          
+          setPollingInterval(interval);
+          
+          // Do initial status check
+          pollJobStatus(data.record_id);
+        } else {
+          console.error('Failed to submit 3D generation job');
+          setIsGenerating3D(false);
+          setGenerationStatus('failed');
         }
       } else {
-        console.error('Failed to generate 3D model');
+        console.error('Failed to submit 3D generation job');
+        setIsGenerating3D(false);
+        setGenerationStatus('failed');
       }
     } catch (error) {
-      console.error('Error generating 3D model:', error);
-    } finally {
+      console.error('Error submitting 3D generation job:', error);
       setIsGenerating3D(false);
+      setGenerationStatus('failed');
     }
   };
 
@@ -132,19 +217,23 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ imageUrl, originalUrl, ses
           <div className="mt-3">
             <button
               onClick={handleGenerate3D}
-              disabled={isGenerating3D}
+              disabled={isGenerating3D || generationStatus === 'running'}
               className={`w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                isGenerating3D
+                isGenerating3D || generationStatus === 'running'
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : generationStatus === 'failed'
+                  ? 'bg-red-600 text-white hover:bg-red-700'
                   : 'bg-purple-600 text-white hover:bg-purple-700'
               }`}
             >
               <CubeIcon className="w-4 h-4" />
               <span>
-                {isGenerating3D 
+                {generationStatus === 'running' || isGenerating3D
                   ? 'Generating 3D...' 
-                  : threeDModelUrl 
+                  : generationStatus === 'completed' || threeDModelUrl 
                     ? 'View 3D in Studio' 
+                    : generationStatus === 'failed'
+                    ? 'Retry 3D Generation'
                     : 'Generate 3D View'
                 }
               </span>

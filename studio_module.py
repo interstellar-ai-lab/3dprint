@@ -134,13 +134,13 @@ class StudioSupabaseManager:
                     "3d_url" as model_3d_url
                 FROM generated_images 
                 WHERE image_url IS NOT NULL
-                ORDER BY created_at DESC
+                ORDER BY id DESC
                 LIMIT %s
             """
             
             response = self.client.table('generated_images').select(
                 'id, created_at, target_object, iteration, image_url, 3d_url'
-            ).order('created_at', desc=True).limit(max_results).execute()
+            ).order('id', desc=True).limit(max_results).execute()
             
             if response.data:
                 images = []
@@ -433,7 +433,7 @@ class StudioSupabaseManager:
             # Search in the database using ILIKE for case-insensitive search
             response = self.client.table('generated_images').select(
                 'id, created_at, target_object, iteration, image_url, 3d_url'
-            ).ilike('target_object', f'%{query}%').order('created_at', desc=True).limit(max_results).execute()
+            ).ilike('target_object', f'%{query}%').order('id', desc=True).limit(max_results).execute()
             
             if response.data:
                 images = []
