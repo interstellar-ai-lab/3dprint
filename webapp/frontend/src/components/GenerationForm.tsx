@@ -93,7 +93,7 @@ export const GenerationForm: React.FC = () => {
         {/* Action Buttons */}
         <div className="flex space-x-4">
           {/* Start/Stop Button */}
-          {currentSession?.status === 'running' ? (
+          {currentSession?.status === 'running' || currentSession?.status === 'waiting_for_feedback' ? (
             <button
               type="button"
               onClick={handleStop}
@@ -102,7 +102,7 @@ export const GenerationForm: React.FC = () => {
             >
               <StopIcon className="w-6 h-6" />
               <span>
-                {stopMutation.isLoading ? 'Stopping...' : 'Stop Generation'}
+                {stopMutation.isLoading ? 'Stopping...' : '⏹️ Stop Generation'}
               </span>
             </button>
           ) : (
@@ -126,9 +126,9 @@ export const GenerationForm: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-blue-800 font-medium">
-                Generation Status: {currentSession.status.charAt(0).toUpperCase() + currentSession.status.slice(1)}
+                Generation Status: {currentSession.status === 'waiting_for_feedback' ? 'Waiting for Feedback' : currentSession.status.charAt(0).toUpperCase() + currentSession.status.slice(1)}
               </p>
-              {currentSession.status === 'running' && (
+              {(currentSession.status === 'running' || currentSession.status === 'waiting_for_feedback') && (
                 <p className="text-blue-600 text-sm">
                   Iteration {currentSession.current_iteration} of {currentSession.max_iterations}
                 </p>

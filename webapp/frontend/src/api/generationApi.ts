@@ -25,6 +25,11 @@ export const stopGeneration = async (sessionId: string): Promise<{ session_id: s
   return response.data;
 };
 
+export const submitFeedback = async (sessionId: string, feedback: string): Promise<{ session_id: string; status: string; message: string }> => {
+  const response = await api.post(`/api/feedback/${sessionId}`, { feedback });
+  return response.data;
+};
+
 export const getSessionStatus = async (sessionId: string): Promise<GenerationSession> => {
   const response = await api.get(`/api/status/${sessionId}`);
   return response.data;

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 export interface GenerationSession {
   session_id: string;
-  status: 'running' | 'completed' | 'failed' | 'stopped';
+  status: 'running' | 'completed' | 'failed' | 'stopped' | 'waiting_for_feedback';
   target_object: string;
   mode: string;
   max_iterations: number;
@@ -11,6 +11,8 @@ export interface GenerationSession {
   final_score: number;
   error?: string;
   evaluation_status?: string;
+  feedback_prompt?: string;
+  user_feedback?: string;
 }
 
 export interface IterationResult {

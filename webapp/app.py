@@ -265,7 +265,7 @@ def download_image_to_pil_sync(image_url: str) -> Optional[Image.Image]:
         logger.error(f"Error loading image from {image_url}: {e}")
         return None
 
-def generate_multiview_with_gpt_image1(target_object: str, iteration: int = 1, previous_feedback: List[str] = None, previous_image_url: str = None) -> str:
+def generate_multiview_with_gpt_image1(target_object: str, iteration: int = 1, previous_feedback: List[str] = None, previous_image_url: str = None, user_feedback: str = None) -> str:
     """Generate 2x2 multiview image using GPT-Image-1 with image-to-image capability"""
     
     # Create the generation instructions
@@ -294,13 +294,28 @@ VIEW REQUIREMENTS:
 
 OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION. FAILURE TO MAINTAIN CONSISTENCY WILL RESULT IN POOR RECONSTRUCTION QUALITY."""
 
-    # Add feedback from previous iterations
-    feedback_text = " ".join(previous_feedback) if previous_feedback else "No specific feedback available"
-    if previous_feedback:
+    # Add feedback from previous iterations with user feedback having highest priority
+    ai_feedback_text = " ".join(previous_feedback) if previous_feedback else "No specific AI feedback available"
+    
+    if user_feedback:
+        # User feedback has highest priority
+        instructions += f"""
+
+HIGHEST PRIORITY - USER FEEDBACK (MUST ADDRESS):
+{user_feedback}
+
+This user feedback MUST be addressed and implemented in the next iteration. It takes precedence over all other considerations.
+
+ADDITIONAL AI SUGGESTIONS (if any):
+{ai_feedback_text if previous_feedback else "No additional AI suggestions"}
+
+CRITICAL: The user's specific request above MUST be prioritized and implemented."""
+    elif previous_feedback:
+        # Only AI feedback available
         if iteration > 1:
-            instructions += f" IMPORTANT: Based on the previous image, address these specific issues: {feedback_text}. Maintain the good aspects while fixing the problems identified."
+            instructions += f" IMPORTANT: Based on the previous image, address these specific issues: {ai_feedback_text}. Maintain the good aspects while fixing the problems identified."
         else:
-            instructions += f" IMPORTANT: Address these specific issues from previous iteration: {feedback_text}"
+            instructions += f" IMPORTANT: Address these specific issues from previous iteration: {ai_feedback_text}"
     
     try:
         # Debug logging
@@ -328,8 +343,21 @@ OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION. FAILURE TO
                     size="1024x1024",
                 )
             else:
-                # Create edit instructions based on feedback
-                edit_instructions = f"""Improve this 2x2 multiview image of {target_object} by addressing these specific issues: {feedback_text}. Maintain the overall structure and good aspects while fixing the identified problems.
+                # Create edit instructions based on feedback with user feedback priority
+                if user_feedback:
+                    edit_instructions = f"""Improve this 2x2 multiview image of {target_object} by addressing these specific issues:
+
+HIGHEST PRIORITY - USER FEEDBACK (MUST ADDRESS):
+{user_feedback}
+
+This user feedback MUST be addressed and implemented. It takes precedence over all other considerations.
+
+ADDITIONAL AI SUGGESTIONS (if any):
+{ai_feedback_text if previous_feedback else "No additional AI suggestions"}
+
+CRITICAL: The user's specific request above MUST be prioritized and implemented. Maintain the overall structure and good aspects while addressing the user's feedback."""
+                else:
+                    edit_instructions = f"""Improve this 2x2 multiview image of {target_object} by addressing these specific issues: {ai_feedback_text}. Maintain the overall structure and good aspects while fixing the identified problems.
 
 GRID LAYOUT (2x2):
 - Top Left: FRONT view
@@ -756,8 +784,14 @@ def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: s
         # Update session status
         active_sessions[session_id]["current_iteration"] = iteration
         
+        # Get user feedback for this iteration
+        user_feedback_for_this_iteration = active_sessions[session_id].get("user_feedback_for_next", "")
+        
+        if user_feedback_for_this_iteration:
+            logger.info(f"🎯 Using user feedback for iteration {iteration}: {user_feedback_for_this_iteration}")
+        
         # Generate image with GPT-Image-1 (image-to-image for iterations > 1)
-        image_url = generate_multiview_with_gpt_image1(target_object, iteration, previous_feedback, previous_image_url)
+        image_url = generate_multiview_with_gpt_image1(target_object, iteration, previous_feedback, previous_image_url, user_feedback_for_this_iteration)
         
         if not image_url:
             active_sessions[session_id]["status"] = "failed"
@@ -805,6 +839,10 @@ def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: s
         # Store current image URL for next iteration
         previous_image_url = image_url
         
+        # Clear user feedback after it's been used
+        if "user_feedback_for_next" in active_sessions[session_id]:
+            del active_sessions[session_id]["user_feedback_for_next"]
+        
         # Print image URL info without cluttering the console
         if image_url.startswith('data:image/'):
             logger.info(f"📸 Stored base64 image for iteration {iteration}")
@@ -824,6 +862,36 @@ def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: s
         logger.info(f"   Suggestions for Improvement: {previous_feedback}")
         logger.info(f"   Overall Score: {scores.get('overall', 'N/A')}/10")
         logger.info(f"   Remaining iterations: {max_iterations - iteration}")
+        
+        # Pause for user feedback (except for the last iteration)
+        if iteration < max_iterations:
+            logger.info(f"⏸️ Pausing for user feedback after iteration {iteration}")
+            active_sessions[session_id]["status"] = "waiting_for_feedback"
+            active_sessions[session_id]["current_iteration"] = iteration
+            active_sessions[session_id]["feedback_prompt"] = f"Evaluation complete for iteration {iteration}. Any suggestions for improvement?"
+            
+            # Wait for user feedback or timeout
+            import time
+            start_time = time.time()
+            timeout = 30  # 30 seconds timeout
+            
+            while active_sessions[session_id]["status"] == "waiting_for_feedback":
+                time.sleep(1)
+                if time.time() - start_time > timeout:
+                    logger.info(f"⏰ Timeout waiting for user feedback after iteration {iteration}")
+                    active_sessions[session_id]["status"] = "running"
+                    active_sessions[session_id]["user_feedback"] = ""
+                    break
+            
+            # Get user feedback if provided
+            user_feedback = active_sessions[session_id].get("user_feedback", "")
+            if user_feedback:
+                logger.info(f"💬 User feedback received: {user_feedback}")
+                # Store user feedback separately for high priority handling
+                active_sessions[session_id]["user_feedback_for_next"] = user_feedback
+            else:
+                logger.info(f"⏭️ No user feedback provided, continuing with AI suggestions")
+                active_sessions[session_id]["user_feedback_for_next"] = ""
         
         # Add a minimal delay between iterations to prevent overwhelming the API
         import time
@@ -903,7 +971,9 @@ def get_status(session_id):
             "iterations": session["iterations"],
             "final_score": session["final_score"],
             "error": session.get("error", None),
-            "evaluation_status": session.get("evaluation_status", None)
+            "evaluation_status": session.get("evaluation_status", None),
+            "feedback_prompt": session.get("feedback_prompt", None),
+            "user_feedback": session.get("user_feedback", None)
         })
         
     except Exception as e:
@@ -936,6 +1006,37 @@ def stop_generation(session_id):
         
     except Exception as e:
         logger.error(f"Error stopping generation session {session_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/feedback/<session_id>', methods=['POST'])
+def submit_feedback(session_id):
+    """Submit user feedback for the next iteration"""
+    try:
+        if session_id not in active_sessions:
+            return jsonify({"error": "Session not found"}), 404
+        
+        session = active_sessions[session_id]
+        
+        if session["status"] != "waiting_for_feedback":
+            return jsonify({"error": "Session is not waiting for feedback"}), 400
+        
+        data = request.get_json()
+        user_feedback = data.get('feedback', '').strip()
+        
+        # Store user feedback in session
+        session["user_feedback"] = user_feedback
+        session["status"] = "running"  # Resume generation
+        
+        logger.info(f"Received user feedback for session {session_id}: {user_feedback}")
+        
+        return jsonify({
+            "session_id": session_id,
+            "status": "running",
+            "message": "Feedback received, resuming generation"
+        })
+        
+    except Exception as e:
+        logger.error(f"Error submitting feedback for session {session_id}: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/image/<session_id>/<int:iteration>')
