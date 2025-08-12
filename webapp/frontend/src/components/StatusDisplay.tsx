@@ -110,11 +110,13 @@ export const StatusDisplay: React.FC = () => {
           </div>
         )}
 
-        {/* Evaluation Status */}
-        {currentSession.evaluation_status && (
-          <div className="flex items-center space-x-2 text-sm text-gray-600">
-            <EyeIcon className="w-4 h-4" />
-            <span>{currentSession.evaluation_status}</span>
+        {/* Current Activity Status */}
+        {currentSession.status === 'running' && currentSession.evaluation_status && (
+          <div className="flex items-center space-x-2 text-sm text-blue-600">
+            <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <span className="font-medium">
+              {currentSession.evaluation_status}
+            </span>
           </div>
         )}
 
@@ -149,8 +151,21 @@ export const StatusDisplay: React.FC = () => {
             {currentSession.iterations.map((iteration, index) => (
               <div key={index} className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm text-gray-500">
-                    {iteration.evaluation_status}
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-gray-500">
+                      {iteration.evaluation_status}
+                    </span>
+                    {/* Progress indicator for current iteration */}
+                    {currentSession.status === 'running' && 
+                     iteration.iteration === currentSession.current_iteration && (
+                      <div className="flex items-center space-x-1 text-blue-600">
+                        <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-xs font-medium">In Progress</span>
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-sm font-medium text-gray-700">
+                    Iteration {iteration.iteration}
                   </span>
                 </div>
 
@@ -161,78 +176,55 @@ export const StatusDisplay: React.FC = () => {
                   sessionId={currentSession.session_id}
                   iteration={iteration.iteration}
                   targetObject={currentSession.target_object}
+                  isGenerating={
+                    currentSession.status === 'running' && 
+                    iteration.iteration === currentSession.current_iteration &&
+                    !iteration.image_url
+                  }
                 />
 
                 {/* Evaluation Results */}
-                {iteration.evaluation && (
-                  <EvaluationResults 
-                    evaluation={iteration.evaluation}
-                    sessionId={currentSession.session_id}
-                    iteration={iteration.iteration}
-                    isWaitingForFeedback={
-                      currentSession.status === 'waiting_for_feedback' && 
-                      iteration.iteration === currentSession.current_iteration
-                    }
-                    feedbackPrompt={currentSession.feedback_prompt}
-                    userFeedback={iterationFeedback[iteration.iteration]}
-                    onFeedbackSubmitted={(feedback: string) => {
-                      console.log('Feedback submitted for iteration', iteration.iteration, feedback);
-                      setIterationFeedback(prev => ({
-                        ...prev,
-                        [iteration.iteration]: feedback
-                      }));
-                    }}
-                    evaluationStatus={iteration.evaluation_status}
-                    isEvaluating={
-                      currentSession.status === 'running' && 
-                      iteration.iteration === currentSession.current_iteration &&
-                      !!currentSession.evaluation_status
-                    }
-                  />
+                <EvaluationResults 
+                  evaluation={iteration.evaluation}
+                  sessionId={currentSession.session_id}
+                  iteration={iteration.iteration}
+                  isWaitingForFeedback={
+                    currentSession.status === 'waiting_for_feedback' && 
+                    iteration.iteration === currentSession.current_iteration
+                  }
+                  feedbackPrompt={currentSession.feedback_prompt}
+                  userFeedback={iterationFeedback[iteration.iteration]}
+                  isEvaluating={
+                    currentSession.status === 'running' && 
+                    iteration.iteration === currentSession.current_iteration &&
+                    !iteration.evaluation
+                  }
+                  onFeedbackSubmitted={(feedback: string) => {
+                    console.log('Feedback submitted for iteration', iteration.iteration, feedback);
+                    setIterationFeedback(prev => ({
+                      ...prev,
+                      [iteration.iteration]: feedback
+                    }));
+                  }}
+                />
+
+                {/* Next Generation Indicator - Show at bottom of previous iteration */}
+                {currentSession.status === 'running' && 
+                 iteration.iteration === currentSession.current_iteration - 1 && (
+                  <div className="mt-4 p-4 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-5 h-5 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+                      <div>
+                        <h5 className="font-semibold text-purple-800">Generating Next Iteration</h5>
+                        <p className="text-purple-600 text-sm">
+                          Creating iteration {currentSession.current_iteration} based on feedback...
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* Current Generation Status */}
-      {currentSession.status === 'running' && currentSession.current_iteration > 0 && (
-        <div className="bg-white rounded-2xl shadow-lg p-6">
-          <div className="flex items-center space-x-3 mb-4">
-            <ClockIcon className="w-6 h-6 text-blue-500 animate-spin" />
-            <h3 className="text-xl font-semibold text-gray-800">
-              Working on Iteration {currentSession.current_iteration}
-            </h3>
-          </div>
-          
-          <div className="space-y-4">
-            {/* Generation Status */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-                <div>
-                  <h4 className="font-semibold text-blue-800">
-                    {currentSession.evaluation_status || 'Generating Image...'}
-                  </h4>
-                  <p className="text-blue-600 text-sm">
-                    Creating multiview image for {currentSession.target_object}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Progress Indicator */}
-            <div className="flex items-center justify-between text-sm text-gray-600">
-              <span>Iteration {currentSession.current_iteration} of {currentSession.max_iterations}</span>
-              <span>{Math.round((currentSession.current_iteration / currentSession.max_iterations) * 100)}%</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div 
-                className="bg-gradient-to-r from-purple-600 to-blue-600 h-2 rounded-full transition-all duration-500"
-                style={{ width: `${(currentSession.current_iteration / currentSession.max_iterations) * 100}%` }}
-              />
-            </div>
           </div>
         </div>
       )}

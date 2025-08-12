@@ -8,7 +8,7 @@ import {
 import { FeedbackPrompt } from './FeedbackPrompt';
 
 interface EvaluationResultsProps {
-  evaluation: {
+  evaluation?: {
     scores: Record<string, number>;
     issues: string[];
     suggestions: string[];
@@ -19,7 +19,6 @@ interface EvaluationResultsProps {
   feedbackPrompt?: string;
   userFeedback?: string;
   onFeedbackSubmitted?: (feedback: string) => void;
-  evaluationStatus?: string;
   isEvaluating?: boolean;
 }
 
@@ -31,8 +30,7 @@ export const EvaluationResults: React.FC<EvaluationResultsProps> = ({
   feedbackPrompt, 
   userFeedback, 
   onFeedbackSubmitted,
-  evaluationStatus,
-  isEvaluating
+  isEvaluating = false
 }) => {
   const getScoreLabel = (score: number) => {
     if (score >= 9.0) return 'Perfect';
@@ -61,25 +59,28 @@ export const EvaluationResults: React.FC<EvaluationResultsProps> = ({
       .replace(/^./, str => str.toUpperCase());
   };
 
-  return (
-    <div className="mt-4 space-y-4">
-      {/* Evaluation Progress */}
-      {isEvaluating && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <div className="flex items-center space-x-3">
-            <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
-            <div>
-              <h5 className="font-semibold text-yellow-800">
-                {evaluationStatus || 'Evaluating Image...'}
-              </h5>
-              <p className="text-yellow-600 text-sm">
-                Analyzing quality and generating suggestions for iteration {iteration}
-              </p>
-            </div>
+  // Show evaluation progress if evaluation is not ready yet
+  if (isEvaluating) {
+    return (
+      <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="flex items-center space-x-3">
+          <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <div>
+            <h5 className="font-semibold text-blue-800">Evaluating Image</h5>
+            <p className="text-blue-600 text-sm">Analyzing quality and generating suggestions...</p>
           </div>
         </div>
-      )}
+      </div>
+    );
+  }
 
+  // Show evaluation results if available
+  if (!evaluation) {
+    return null;
+  }
+
+  return (
+    <div className="mt-4 space-y-4">
       {/* Scores */}
       <div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">

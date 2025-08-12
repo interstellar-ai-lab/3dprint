@@ -10,9 +10,10 @@ interface ImageGridProps {
   sessionId?: string;
   iteration?: number;
   targetObject?: string;
+  isGenerating?: boolean;
 }
 
-export const ImageGrid: React.FC<ImageGridProps> = ({ imageUrl, originalUrl, sessionId, iteration, targetObject }) => {
+export const ImageGrid: React.FC<ImageGridProps> = ({ imageUrl, originalUrl, sessionId, iteration, targetObject, isGenerating = false }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -210,6 +211,17 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ imageUrl, originalUrl, ses
               <MagnifyingGlassIcon className="w-8 h-8 text-white" />
             </div>
           </div>
+
+          {/* Generation Progress Overlay */}
+          {isGenerating && (
+            <div className="absolute inset-0 bg-blue-900 bg-opacity-75 flex items-center justify-center">
+              <div className="text-center text-white">
+                <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                <p className="text-sm font-medium">Generating Image...</p>
+                <p className="text-xs opacity-75">Please wait</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Generate 3D Button */}
