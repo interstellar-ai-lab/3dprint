@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { ThreeViewer } from './ThreeViewer';
-import { Online3DViewer } from './Online3DViewer';
 import { OrderModal } from './OrderModal';
 import { ImageCard } from './ImageCard';
 
@@ -53,7 +52,7 @@ export const Studio: React.FC = () => {
 
 
   const [orderModalOpen, setOrderModalOpen] = useState(false);
-  const [viewerEngine, setViewerEngine] = useState<'threejs' | 'online3d'>('threejs');
+
 
   // API base URL - adjust this according to your backend setup
   const API_BASE = process.env.REACT_APP_API_URL || 'https://vicino.ai';
@@ -499,73 +498,18 @@ export const Studio: React.FC = () => {
                       </p>
                     </div>
                   </div>
-                  
-                  {/* Viewer Controls */}
-                  <div className="flex items-center space-x-2">
-                    {/* Engine Selector */}
-                    <div className="flex items-center bg-white/10 rounded-lg p-1">
-                      <button
-                        onClick={() => setViewerEngine('threejs')}
-                        className={`px-3 py-1 text-xs rounded-md transition-all ${
-                          viewerEngine === 'threejs' 
-                            ? 'bg-purple-500 text-white shadow-lg' 
-                            : 'text-white/70 hover:text-white hover:bg-white/10'
-                        }`}
-                      >
-                        Three.js
-                      </button>
-                      <button
-                        onClick={() => setViewerEngine('online3d')}
-                        className={`px-3 py-1 text-xs rounded-md transition-all ${
-                          viewerEngine === 'online3d' 
-                            ? 'bg-green-500 text-white shadow-lg' 
-                            : 'text-white/70 hover:text-white hover:bg-white/10'
-                        }`}
-                      >
-                        Online3D
-                      </button>
-                    </div>
-
-                    <button className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-white/70 hover:text-white">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                      </svg>
-                    </button>
-                    <button className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-white/70 hover:text-white">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                      </svg>
-                    </button>
-                    <button 
-                      onClick={() => setSelected3DModel(null)}
-                      className="p-2 bg-white/10 hover:bg-red-500/20 rounded-lg transition-colors text-white/70 hover:text-red-400"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
                 </div>
               </div>
               
               {/* 3D Viewport */}
               <div className="flex-1 relative">
-                {viewerEngine === 'threejs' ? (
-                  <ThreeViewer
-                    modelUrl={selected3DModel.model_3d_url || selected3DModel.zipurl || ''}
-                    isOpen={true}
-                    embedded={true}
-                    onClose={() => setSelected3DModel(null)}
-                    modelName={selected3DModel.target_object || selected3DModel.filename}
-                  />
-                ) : (
-                  <Online3DViewer
-                    modelUrl={selected3DModel.model_3d_url || selected3DModel.zipurl || ''}
-                    isOpen={true}
-                    onClose={() => setSelected3DModel(null)}
-                    modelName={selected3DModel.filename}
-                  />
-                )}
+                <ThreeViewer
+                  modelUrl={selected3DModel.model_3d_url || selected3DModel.zipurl || ''}
+                  isOpen={true}
+                  embedded={true}
+                  onClose={() => setSelected3DModel(null)}
+                  modelName={selected3DModel.target_object || selected3DModel.filename}
+                />
               </div>
             </div>
           ) : (
