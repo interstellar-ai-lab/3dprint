@@ -10,11 +10,8 @@ export const Hero: React.FC = () => {
       
       <div className="relative z-10">
         <div className="mb-6 space-y-3">
-          <span className="inline-block bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-medium">
-            🚀 Pre-seed Stage • Seattle, WA
-          </span>
           <div className="inline-block bg-gradient-to-r from-blue-500 to-green-500 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-medium">
-            🏆 Google Cloud Startup • $25k Credit Awarded
+            🏆 Partner with Google Cloud
           </div>
         </div>
         

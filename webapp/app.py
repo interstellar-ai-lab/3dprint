@@ -870,18 +870,11 @@ def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: s
             active_sessions[session_id]["current_iteration"] = iteration
             active_sessions[session_id]["feedback_prompt"] = f"Evaluation complete for iteration {iteration}. Any suggestions for improvement?"
             
-            # Wait for user feedback or timeout
+            # Wait for user feedback (no timeout)
             import time
-            start_time = time.time()
-            timeout = 30  # 30 seconds timeout
             
             while active_sessions[session_id]["status"] == "waiting_for_feedback":
                 time.sleep(1)
-                if time.time() - start_time > timeout:
-                    logger.info(f"⏰ Timeout waiting for user feedback after iteration {iteration}")
-                    active_sessions[session_id]["status"] = "running"
-                    active_sessions[session_id]["user_feedback"] = ""
-                    break
             
             # Get user feedback if provided
             user_feedback = active_sessions[session_id].get("user_feedback", "")
