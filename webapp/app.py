@@ -1000,8 +1000,8 @@ def stop_generation(session_id):
         
         session = active_sessions[session_id]
         
-        if session["status"] != "running":
-            return jsonify({"error": "Session is not running"}), 400
+        if session["status"] not in ["running", "waiting_for_feedback"]:
+            return jsonify({"error": "Session is not running or waiting for feedback"}), 400
         
         # Mark session as stopped
         session["status"] = "stopped"
