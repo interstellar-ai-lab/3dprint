@@ -47,26 +47,27 @@ A sophisticated multi-agent system for generating 3D CAD models using AI agents.
    ```
 
 4. **Configure API keys:**
-   Edit `multiagent.py` and add your API keys:
-   ```python
-   OPENAI_API_KEY = "your_openai_key"
-   CLAUDE_API_KEY = "your_claude_key"
-   DEEPSEEK_API_KEY = "your_deepseek_key"
-   QWEN_API_KEY = "your_qwen_key"
+   Create a `.env` file in the root directory and add your API keys:
+   ```bash
+   OPENAI_API_KEY=your_openai_key
+   CLAUDE_API_KEY=your_claude_key
+   DEEPSEEK_API_KEY=your_deepseek_key
+   QWEN_API_KEY=your_qwen_key
    ```
 
 ## Usage
 
 ### Command Line Interface
 
-Run the main script:
+Run the web application:
 ```bash
-python multiagent.py
+cd webapp
+python app.py
 ```
 
 The system will:
-- Ask for your desired 3D object
-- Let you choose which AI model to use
+- Start a web server for the 3D generation interface
+- Allow you to input your desired 3D object
 - Generate and iteratively improve results
 - Save outputs to organized directories
 
@@ -81,7 +82,7 @@ The system supports multiple AI providers for speed and quality testing:
 - **DeepSeek**: Cost-effective alternative
 - **Qwen**: Alibaba's AI model
 
-Switch between models by changing `CURRENT_MODEL` in `multiagent.py` or use the interactive selection.
+Switch between models by changing the model configuration in the web application or use the interactive selection.
 
 ## Output Structure
 
@@ -96,9 +97,7 @@ project/
 ## Configuration
 
 ### Model Selection
-```python
-CURRENT_MODEL = "claude"  # Options: "openai", "claude", "deepseek", "qwen"
-```
+The web application allows you to select different AI models through the interface. Available options include OpenAI GPT-4o, Claude 3 Sonnet, DeepSeek, and Qwen.
 
 ### Quality Thresholds
 ```python
@@ -118,10 +117,10 @@ if all scores > 6.5:
 
 ### Customizing Prompts
 
-Edit the prompts in:
-- `generation_agent()` function
-- `PROMPT` variable for evaluation agent
-- `generate_mesh_image()` function
+Edit the prompts in the web application:
+- Generation agent prompts in `webapp/app.py`
+- Evaluation agent prompts in the application logic
+- Image generation prompts in the DALL-E integration
 
 ## Troubleshooting
 
