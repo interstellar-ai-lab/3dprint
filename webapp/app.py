@@ -1202,6 +1202,216 @@ def generate_3d():
         logger.error(f"Error in generate-3d endpoint: {e}")
         return jsonify({"error": "Internal server error"}), 500
 
+@app.route('/api/upload-multiview', methods=['POST'])
+def upload_multiview():
+    """Handle multi-view image upload and direct 3D generation"""
+    try:
+        # Check if files are present
+        if 'front' not in request.files or 'left' not in request.files or 'back' not in request.files or 'right' not in request.files:
+            return jsonify({"error": "All four views (front, left, back, right) are required"}), 400
+        
+        # Get uploaded files
+        front_file = request.files['front']
+        left_file = request.files['left']
+        back_file = request.files['back']
+        right_file = request.files['right']
+        
+        # Validate files
+        files = [front_file, left_file, back_file, right_file]
+        for file in files:
+            if file.filename == '':
+                return jsonify({"error": "No file selected"}), 400
+            if not file.content_type.startswith('image/'):
+                return jsonify({"error": "All files must be images"}), 400
+        
+        # Generate unique session ID and timestamp
+        session_id = str(uuid.uuid4())
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Only upload front image to Supabase for database record
+        front_file_data = front_file.read()
+        front_file.seek(0)  # Reset file pointer
+        
+        front_filename = f"front_view_{session_id}_{timestamp}.png"
+        front_supabase_url = upload_image_to_supabase(front_file_data, front_filename)
+        if not front_supabase_url:
+            return jsonify({"error": "Failed to upload front view"}), 500
+        
+        # Store all file data for direct processing (no need to upload to Supabase)
+        file_data = {
+            'front': front_file.read(),
+            'left': left_file.read(),
+            'back': back_file.read(),
+            'right': right_file.read()
+        }
+        
+        # Reset file pointers for background processing
+        front_file.seek(0)
+        left_file.seek(0)
+        back_file.seek(0)
+        right_file.seek(0)
+        
+        # Create a target object name based on timestamp
+        target_object = f"multiview_upload_{timestamp}"
+        
+        # Insert record into database with pending status
+        record_id = insert_image_record(target_object, front_supabase_url, 1)  # Use front view as main image
+        if not record_id:
+            return jsonify({"error": "Failed to insert database record"}), 500
+        
+        # Update record with pending status
+        if SUPABASE_AVAILABLE and supabase_client:
+            supabase_client.table('generated_images').update({
+                "status": "running",
+                "task_id": None,  # Will be set when task is created
+                "updated_at": datetime.now().isoformat()
+            }).eq('id', record_id).execute()
+        
+        # Start background processing
+        thread = threading.Thread(
+            target=process_multiview_upload_background,
+            args=(session_id, target_object, file_data, record_id, timestamp)
+        )
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            "success": True,
+            "session_id": session_id,
+            "record_id": record_id,
+            "status": "running",
+            "status_url": f"/api/generation-status/{record_id}",
+            "message": "Multi-view upload and 3D generation started successfully"
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in upload-multiview endpoint: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
+def process_multiview_upload_background(session_id, target_object, file_data, record_id, timestamp):
+    """Background function to process multi-view upload and 3D generation"""
+    try:
+        # Import the Tripo functions
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+        
+        from test_tripo_multiview_to_3d import create_multiview_task, get_task, download
+        
+        # Convert file data directly to PIL Images
+        from PIL import Image
+        import io
+        
+        views = {}
+        for view_name, data in file_data.items():
+            try:
+                image = Image.open(io.BytesIO(data))
+                views[view_name] = image
+            except Exception as e:
+                error_msg = f"Failed to process {view_name} view: {str(e)}"
+                logger.error(f"❌ {error_msg}")
+                update_job_status(record_id, "failed", error_msg)
+                return
+        
+        # Submit to Tripo API
+        task_id = create_multiview_task(views)
+        
+        # Update record with task_id and processing status
+        if SUPABASE_AVAILABLE and supabase_client:
+            supabase_client.table('generated_images').update({
+                "status": "running",
+                "task_id": task_id,
+                "updated_at": datetime.now().isoformat()
+            }).eq('id', record_id).execute()
+        
+        logger.info(f"✅ Submitted Tripo task {task_id} for multi-view upload record {record_id}")
+        
+        # Poll for completion
+        max_attempts = 60  # 10 minutes with 10-second intervals
+        for attempt in range(max_attempts):
+            try:
+                info = get_task(task_id)
+                if info.get("code") != 0:
+                    # Log the full error for debugging
+                    logger.error(f"❌ Tripo API error: {info}")
+                    
+                    # Provide user-friendly error message based on error code
+                    error_code = info.get("code")
+                    if error_code == 2010:
+                        user_error_msg = "Generation failed due to insufficient credits. Please try again later or contact support."
+                    elif error_code in [400, 401, 403]:
+                        user_error_msg = "Generation service temporarily unavailable. Please try again later."
+                    elif error_code in [500, 502, 503]:
+                        user_error_msg = "Generation service is experiencing issues. Please try again later."
+                    else:
+                        user_error_msg = "Generation failed. Please try again or contact support if the problem persists."
+                    
+                    update_job_status(record_id, "failed", user_error_msg)
+                    return
+                
+                status = info["data"]["status"]
+                logger.info(f"Task {task_id} status: {status} (attempt {attempt + 1}/{max_attempts})")
+                
+                # Handle finalized statuses
+                if status == "success":
+                    # Process successful completion
+                    process_successful_job(info, task_id, session_id, 1, target_object, record_id, timestamp)
+                    return
+                elif status == "failed":
+                    # Log the full error for debugging
+                    logger.error(f"❌ Tripo task failed: {info}")
+                    user_error_msg = "Generation failed. Please try again or contact support if the problem persists."
+                    update_job_status(record_id, "failed", user_error_msg)
+                    return
+                elif status == "cancelled":
+                    user_error_msg = "Generation was cancelled. Please try again."
+                    logger.warning(f"⚠️ Tripo task was cancelled")
+                    update_job_status(record_id, "cancelled", user_error_msg)
+                    return
+                elif status == "unknown":
+                    user_error_msg = "Generation service is experiencing issues. Please try again later."
+                    logger.error(f"❌ Tripo task status unknown - system level issue")
+                    update_job_status(record_id, "failed", user_error_msg)
+                    return
+                
+                # Handle ongoing statuses
+                elif status in ("queued", "running"):
+                    # Continue polling
+                    pass
+                else:
+                    # Unknown status, log and continue
+                    logger.warning(f"⚠️ Unknown status '{status}' for task {task_id}")
+                
+                import time
+                time.sleep(10)  # Wait 10 seconds before next poll
+                
+            except Exception as e:
+                logger.error(f"Error polling task {task_id}: {e}")
+                time.sleep(10)
+        
+        # Handle timeout
+        logger.error(f"❌ Timeout waiting for 3D generation after {max_attempts * 10} seconds")
+        user_error_msg = "Generation timed out. Please try again with smaller images or contact support."
+        update_job_status(record_id, "timeout", user_error_msg)
+        
+    except Exception as e:
+        # Log the full error for debugging
+        logger.error(f"❌ Error in background multi-view processing: {str(e)}")
+        
+        # Provide user-friendly error message
+        if "403" in str(e) and "credit" in str(e).lower():
+            user_error_msg = "Generation failed due to insufficient credits. Please try again later or contact support."
+        elif "403" in str(e):
+            user_error_msg = "Generation service temporarily unavailable. Please try again later."
+        elif "timeout" in str(e).lower():
+            user_error_msg = "Generation timed out. Please try again with smaller images or contact support."
+        elif "connection" in str(e).lower():
+            user_error_msg = "Connection error. Please check your internet connection and try again."
+        else:
+            user_error_msg = "Generation failed. Please try again or contact support if the problem persists."
+        
+        update_job_status(record_id, "failed", user_error_msg)
+
 def process_3d_generation_background(session_id, iteration, target_object, image_data, record_id, timestamp):
     """Background function to process 3D generation"""
     try:
@@ -1241,9 +1451,21 @@ def process_3d_generation_background(session_id, iteration, target_object, image
             try:
                 info = get_task(task_id)
                 if info.get("code") != 0:
-                    error_msg = f"Tripo API error: {info}"
-                    logger.error(f"❌ {error_msg}")
-                    update_job_status(record_id, "failed", error_msg)
+                    # Log the full error for debugging
+                    logger.error(f"❌ Tripo API error: {info}")
+                    
+                    # Provide user-friendly error message based on error code
+                    error_code = info.get("code")
+                    if error_code == 2010:
+                        user_error_msg = "Generation failed due to insufficient credits. Please try again later or contact support."
+                    elif error_code in [400, 401, 403]:
+                        user_error_msg = "Generation service temporarily unavailable. Please try again later."
+                    elif error_code in [500, 502, 503]:
+                        user_error_msg = "Generation service is experiencing issues. Please try again later."
+                    else:
+                        user_error_msg = "Generation failed. Please try again or contact support if the problem persists."
+                    
+                    update_job_status(record_id, "failed", user_error_msg)
                     return
                 
                 status = info["data"]["status"]
@@ -1255,19 +1477,20 @@ def process_3d_generation_background(session_id, iteration, target_object, image
                     process_successful_job(info, task_id, session_id, iteration, target_object, record_id, timestamp)
                     return
                 elif status == "failed":
-                    error_msg = f"Tripo task failed: {info}"
-                    logger.error(f"❌ {error_msg}")
-                    update_job_status(record_id, "failed", error_msg)
+                    # Log the full error for debugging
+                    logger.error(f"❌ Tripo task failed: {info}")
+                    user_error_msg = "Generation failed. Please try again or contact support if the problem persists."
+                    update_job_status(record_id, "failed", user_error_msg)
                     return
                 elif status == "cancelled":
-                    error_msg = "Tripo task was cancelled"
-                    logger.warning(f"⚠️ {error_msg}")
-                    update_job_status(record_id, "cancelled", error_msg)
+                    user_error_msg = "Generation was cancelled. Please try again."
+                    logger.warning(f"⚠️ Tripo task was cancelled")
+                    update_job_status(record_id, "cancelled", user_error_msg)
                     return
                 elif status == "unknown":
-                    error_msg = "Tripo task status unknown - system level issue"
-                    logger.error(f"❌ {error_msg}")
-                    update_job_status(record_id, "failed", error_msg)
+                    user_error_msg = "Generation service is experiencing issues. Please try again later."
+                    logger.error(f"❌ Tripo task status unknown - system level issue")
+                    update_job_status(record_id, "failed", user_error_msg)
                     return
                 
                 # Handle ongoing statuses
@@ -1286,14 +1509,27 @@ def process_3d_generation_background(session_id, iteration, target_object, image
                 time.sleep(10)
         
         # Handle timeout
-        error_msg = f"Timeout waiting for 3D generation after {max_attempts * 10} seconds"
-        logger.error(f"❌ {error_msg}")
-        update_job_status(record_id, "timeout", error_msg)
+        logger.error(f"❌ Timeout waiting for 3D generation after {max_attempts * 10} seconds")
+        user_error_msg = "Generation timed out. Please try again with smaller images or contact support."
+        update_job_status(record_id, "timeout", user_error_msg)
         
     except Exception as e:
-        error_msg = f"Error in background 3D generation: {str(e)}"
-        logger.error(f"❌ {error_msg}")
-        update_job_status(record_id, "failed", error_msg)
+        # Log the full error for debugging
+        logger.error(f"❌ Error in background 3D generation: {str(e)}")
+        
+        # Provide user-friendly error message
+        if "403" in str(e) and "credit" in str(e).lower():
+            user_error_msg = "Generation failed due to insufficient credits. Please try again later or contact support."
+        elif "403" in str(e):
+            user_error_msg = "Generation service temporarily unavailable. Please try again later."
+        elif "timeout" in str(e).lower():
+            user_error_msg = "Generation timed out. Please try again with smaller images or contact support."
+        elif "connection" in str(e).lower():
+            user_error_msg = "Connection error. Please check your internet connection and try again."
+        else:
+            user_error_msg = "Generation failed. Please try again or contact support if the problem persists."
+        
+        update_job_status(record_id, "failed", user_error_msg)
 
 def process_successful_job(info, task_id, session_id, iteration, target_object, record_id, timestamp):
     """Process a successfully completed 3D generation job"""
@@ -1400,7 +1636,19 @@ def get_generation_status(record_id):
         if not SUPABASE_AVAILABLE or not supabase_client:
             return jsonify({"error": "Database not available"}), 500
         
-        result = supabase_client.table('generated_images').select('*').eq('id', record_id).execute()
+        # Add retry logic for database connection issues
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                result = supabase_client.table('generated_images').select('*').eq('id', record_id).execute()
+                break
+            except Exception as db_error:
+                if attempt == max_retries - 1:
+                    logger.error(f"Database connection failed after {max_retries} attempts: {db_error}")
+                    return jsonify({"error": "Database connection failed"}), 500
+                logger.warning(f"Database connection attempt {attempt + 1} failed, retrying...")
+                import time
+                time.sleep(0.5)  # Short delay before retry
         
         if not result.data:
             return jsonify({"error": "Record not found"}), 404

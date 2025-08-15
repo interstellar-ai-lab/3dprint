@@ -1,10 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { GenerationForm } from './GenerationForm';
+import { MultiViewUploadForm } from './MultiViewUploadForm';
 import { StatusDisplay } from './StatusDisplay';
 import { useGenerationStore } from '../stores/generationStore';
 
 export const DemoSection: React.FC = () => {
   const { currentSession } = useGenerationStore();
+  const [mode, setMode] = useState<'ai' | 'upload'>('ai');
+
+  const handleUploadSuccess = (data: any) => {
+    // Handle successful upload - could set a session or show success message
+    console.log('Upload successful:', data);
+    // You might want to redirect to a status page or show the 3D model
+  };
+
+  const handleUploadError = (error: any) => {
+    console.error('Upload failed:', error);
+  };
 
   return (
     <section className="py-20 bg-gradient-to-br from-purple-50 to-blue-50">
@@ -26,14 +38,47 @@ export const DemoSection: React.FC = () => {
               <h3 className="text-2xl font-bold mb-2">
                 Live Demo
               </h3>
-              <p className="opacity-90">
-                Enter a target object and watch our multi-agent system generate high-fidelity 3D assets
+              <p className="opacity-90 mb-6">
+                Choose your preferred method to generate high-fidelity 3D assets
               </p>
+              
+              {/* Mode Toggle */}
+              <div className="flex justify-center">
+                <div className="bg-white/20 rounded-lg p-1 flex">
+                  <button
+                    onClick={() => setMode('ai')}
+                    className={`px-6 py-2 rounded-md font-medium transition-all duration-200 ${
+                      mode === 'ai'
+                        ? 'bg-white text-purple-600 shadow-sm'
+                        : 'text-white hover:bg-white/10'
+                    }`}
+                  >
+                    🤖 AI Generation
+                  </button>
+                  <button
+                    onClick={() => setMode('upload')}
+                    className={`px-6 py-2 rounded-md font-medium transition-all duration-200 ${
+                      mode === 'upload'
+                        ? 'bg-white text-purple-600 shadow-sm'
+                        : 'text-white hover:bg-white/10'
+                    }`}
+                  >
+                    📤 Upload Multi-View
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* Demo Content */}
             <div className="p-8">
-              <GenerationForm />
+              {mode === 'ai' ? (
+                <GenerationForm />
+              ) : (
+                <MultiViewUploadForm 
+                  onSuccess={handleUploadSuccess}
+                  onError={handleUploadError}
+                />
+              )}
               {currentSession && <StatusDisplay />}
             </div>
           </div>
