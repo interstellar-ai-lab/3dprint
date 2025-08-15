@@ -673,9 +673,10 @@
                 evaluationSection = `
                     <div style="margin-top: 15px;">
                         <h5>Evaluation Results:</h5>
+                        <!-- Metrics section hidden - all metrics filtered out -->
                         <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
                             <ul style="margin: 10px 0; padding-left: 20px;">
-                                ${Object.entries(evaluation.scores || {}).filter(([key, value]) => key !== 'overall').map(([key, value]) => 
+                                ${Object.entries(evaluation.scores || {}).filter(([key, value]) => false).map(([key, value]) => 
                                     `<li>${metricToFriendlyName(key)}: ${scoreToFriendlyWord(value)}</li>`
                                 ).join('')}
                             </ul>

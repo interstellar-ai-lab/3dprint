@@ -211,17 +211,19 @@ export const MultiViewStatusDisplay: React.FC<MultiViewStatusDisplayProps> = ({
         )}
 
         {/* Success Actions */}
-        {statusData?.status === 'completed' && statusData.model_3d_url && (
+        {statusData?.status === 'completed' && (
           <div className="mt-4 space-y-2">
             <h4 className="font-medium text-gray-900">Your 3D Model is Ready!</h4>
             <div className="flex space-x-2">
-              <a
-                href={statusData.model_3d_url}
-                download
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors text-sm"
-              >
-                📥 Download GLB
-              </a>
+              {statusData.model_3d_url && (
+                <a
+                  href={statusData.model_3d_url}
+                  download
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors text-sm"
+                >
+                  📥 Download GLB
+                </a>
+              )}
               <button
                 onClick={() => {
                   // Open in Studio

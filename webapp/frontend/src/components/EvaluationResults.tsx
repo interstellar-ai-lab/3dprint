@@ -83,9 +83,10 @@ export const EvaluationResults: React.FC<EvaluationResultsProps> = ({
     <div className="mt-4 space-y-4">
       {/* Scores */}
       <div>
+        {/* Metrics section hidden - all metrics filtered out */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {Object.entries(evaluation.scores)
-            .filter(([metric]) => !metric.toLowerCase().includes('overall'))
+            .filter(([metric]) => false) // Hide all metrics
             .map(([metric, score]) => (
               <div
                 key={metric}

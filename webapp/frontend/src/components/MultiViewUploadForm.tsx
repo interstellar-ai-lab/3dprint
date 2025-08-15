@@ -234,13 +234,15 @@ export const MultiViewUploadForm: React.FC<MultiViewUploadFormProps> = ({
 
         {/* Submit Button */}
         {(() => {
-          const isGenerating = isUploading || uploadMutation.isLoading || uploadResult;
+          const isGenerating = isUploading || uploadMutation.isLoading || (uploadResult && generationStatus !== 'completed');
+          const isCompleted = uploadResult && generationStatus === 'completed';
           const isEnabled = isAllViewsUploaded && !isGenerating;
           
           return (
             <button
-              type="submit"
+              type={isCompleted ? "button" : "submit"}
               disabled={!isEnabled}
+              onClick={isCompleted ? () => window.location.href = '/studio' : undefined}
               className={`w-full py-3 px-6 rounded-lg font-medium transition-all duration-200 ${
                 isEnabled
                   ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 shadow-lg hover:shadow-xl'
@@ -252,6 +254,8 @@ export const MultiViewUploadForm: React.FC<MultiViewUploadFormProps> = ({
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
                   {uploadResult ? '3D Generation in Progress...' : 'Starting Generation...'}
                 </div>
+              ) : isCompleted ? (
+                '🎨 View 3D in Studio'
               ) : (
                 '🚀 Generate 3D Model'
               )}
