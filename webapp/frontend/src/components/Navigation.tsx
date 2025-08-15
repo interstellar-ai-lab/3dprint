@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { GoogleSignInButton } from './GoogleSignInButton';
 
 export const Navigation: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { user, signOut, loading } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -19,6 +22,14 @@ export const Navigation: React.FC = () => {
       element.scrollIntoView({ behavior: 'smooth' });
     }
     setIsMobileMenuOpen(false);
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Sign out failed:', error);
+    }
   };
 
   return (
@@ -39,7 +50,7 @@ export const Navigation: React.FC = () => {
           </div>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-8">
+          <div className="hidden md:flex items-center space-x-6">
             <button 
               onClick={() => scrollToSection('features')}
               className={`font-medium transition-colors ${
@@ -64,14 +75,6 @@ export const Navigation: React.FC = () => {
             >
               Market
             </button>
-            {/* <button 
-              onClick={() => scrollToSection('team')}
-              className={`font-medium transition-colors ${
-                isScrolled ? 'text-gray-700 hover:text-purple-600' : 'text-white/90 hover:text-white'
-              }`}
-            >
-              Team
-            </button> */}
             <button 
               onClick={() => {
                 const baseUrl = process.env.REACT_APP_BASE_URL || window.location.origin;
@@ -83,6 +86,40 @@ export const Navigation: React.FC = () => {
             >
               Studio
             </button>
+            
+            {/* Auth Section */}
+            <div className="flex items-center space-x-3">
+              {loading ? (
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
+              ) : user ? (
+                <div className="flex items-center space-x-3">
+                  <span className={`text-sm ${
+                    isScrolled ? 'text-gray-700' : 'text-white/90'
+                  }`}>
+                    {user.email}
+                  </span>
+                  <button
+                    onClick={handleSignOut}
+                    className={`px-3 py-1 rounded text-sm font-medium transition-all ${
+                      isScrolled 
+                        ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' 
+                        : 'bg-white/20 text-white hover:bg-white/30'
+                    }`}
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              ) : (
+                <GoogleSignInButton 
+                  className="w-24"
+                  theme={isScrolled ? "outline" : "filled_blue"}
+                  size="medium"
+                  text="signin"
+                  shape="pill"
+                />
+              )}
+            </div>
+
             <button 
               onClick={() => window.open('https://calendar.app.google/mh5rhYuC3D2fec4x9', '_blank')}
               className={`px-4 py-2 rounded-full font-medium transition-all ${
@@ -136,12 +173,6 @@ export const Navigation: React.FC = () => {
                 Market
               </button>
               <button 
-                onClick={() => scrollToSection('team')}
-                className="text-gray-700 hover:text-purple-600 font-medium text-left"
-              >
-                Team
-              </button>
-              <button 
                 onClick={() => {
                   const baseUrl = process.env.REACT_APP_BASE_URL || window.location.origin;
                   window.open(`${baseUrl}/studio`, '_blank');
@@ -150,6 +181,36 @@ export const Navigation: React.FC = () => {
               >
                 Studio
               </button>
+              
+              {/* Mobile Auth Section */}
+              <div className="pt-2 border-t border-gray-200">
+                {loading ? (
+                  <div className="flex justify-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
+                  </div>
+                ) : user ? (
+                  <div className="space-y-2">
+                    <div className="text-sm text-gray-600">{user.email}</div>
+                    <button
+                      onClick={handleSignOut}
+                      className="w-full bg-gray-200 text-gray-700 px-3 py-2 rounded text-sm font-medium hover:bg-gray-300"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex justify-center">
+                    <GoogleSignInButton 
+                      className="w-full"
+                      theme="outline"
+                      size="large"
+                      text="signin_with"
+                      shape="rectangular"
+                    />
+                  </div>
+                )}
+              </div>
+
               <button 
                 onClick={() => window.open('https://calendar.app.google/mh5rhYuC3D2fec4x9', '_blank')}
                 className="bg-purple-600 text-white px-4 py-2 rounded-full font-medium hover:bg-purple-700">

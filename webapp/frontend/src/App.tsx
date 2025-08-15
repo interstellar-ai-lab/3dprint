@@ -1,6 +1,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from 'react-query';
+import { AuthProvider } from './contexts/AuthContext';
+import { GoogleOneTap } from './components/GoogleOneTap';
 import { Navigation } from './components/Navigation';
 import { Hero } from './components/Hero';
 // import { Features } from './components/Features';
@@ -9,6 +11,7 @@ import { MarketSection } from './components/MarketSection';
 import { DemoSection } from './components/DemoSection';
 import { Studio } from './components/Studio';
 import { Footer } from './components/Footer';
+import { AuthCallback } from './pages/AuthCallback';
 import './App.css';
 
 const queryClient = new QueryClient();
@@ -61,12 +64,16 @@ const StudioPage: React.FC = () => {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <Router>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/studio" element={<StudioPage />} />
-        </Routes>
-      </Router>
+      <AuthProvider>
+        <Router>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/studio" element={<StudioPage />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
+          </Routes>
+        </Router>
+        <GoogleOneTap />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

@@ -5,6 +5,7 @@
   "dependencies": {
     "@headlessui/react": "^1.7.0",
     "@heroicons/react": "^2.0.0",
+    "@supabase/supabase-js": "^2.55.0",
     "@types/jszip": "^3.4.1",
     "@types/node": "^16.18.0",
     "@types/react": "^18.2.0",
@@ -12,6 +13,7 @@
     "@types/three": "^0.179.0",
     "autoprefixer": "^10.4.0",
     "axios": "^1.6.0",
+    "google-one-tap": "^1.0.6",
     "jszip": "^3.10.1",
     "online-3d-viewer": "^0.16.0",
     "postcss": "^8.4.0",
