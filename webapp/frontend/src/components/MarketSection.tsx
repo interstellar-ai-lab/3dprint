@@ -49,20 +49,7 @@ export const MarketSection: React.FC = () => {
     }
   ];
 
-  const pricingTiers = [
-    {
-      name: "Studio Subscription",
-      price: "$40-100",
-      period: "per user/month",
-      features: ["Full platform access", "Priority support", "Custom integrations", "Team collaboration"]
-    },
-    {
-      name: "Enterprise",
-      price: "Custom",
-      period: "usage-based",
-      features: ["High-volume credits", "API licensing", "Dedicated support", "Custom workflows"]
-    }
-  ];
+
 
   return (
     <section className="py-20 bg-white">
@@ -90,25 +77,7 @@ export const MarketSection: React.FC = () => {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-          {pricingTiers.map((tier, index) => (
-            <div key={index} className="bg-white border-2 border-gray-200 rounded-2xl p-8 hover:border-purple-500 transition-all duration-300">
-              <h4 className="text-2xl font-bold text-gray-900 mb-2">{tier.name}</h4>
-              <div className="mb-6">
-                <span className="text-3xl font-bold text-purple-600">{tier.price}</span>
-                <span className="text-gray-600 ml-2">{tier.period}</span>
-              </div>
-              <ul className="space-y-3">
-                {tier.features.map((feature, featureIndex) => (
-                  <li key={featureIndex} className="flex items-center text-gray-700">
-                    <div className="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+
       </div>
     </section>
   );

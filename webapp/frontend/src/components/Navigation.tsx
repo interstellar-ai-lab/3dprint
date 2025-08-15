@@ -64,14 +64,14 @@ export const Navigation: React.FC = () => {
             >
               Market
             </button>
-            <button 
+            {/* <button 
               onClick={() => scrollToSection('team')}
               className={`font-medium transition-colors ${
                 isScrolled ? 'text-gray-700 hover:text-purple-600' : 'text-white/90 hover:text-white'
               }`}
             >
               Team
-            </button>
+            </button> */}
             <button 
               onClick={() => {
                 const baseUrl = process.env.REACT_APP_BASE_URL || window.location.origin;

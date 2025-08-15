@@ -40,7 +40,7 @@ export const DemoSection: React.FC = () => {
         </div>
 
         {/* Features Highlight */}
-        <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+        {/* <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
           <div className="bg-white rounded-xl p-6 shadow-lg text-center">
             <div className="text-3xl mb-4">🎯</div>
             <h4 className="text-lg font-bold text-gray-900 mb-2">Production-Ready Output</h4>
@@ -62,7 +62,7 @@ export const DemoSection: React.FC = () => {
               Interactive refinement and customization through conversational workflow
             </p>
           </div>
-        </div>
+        </div> */}
       </div>
     </section>
   );

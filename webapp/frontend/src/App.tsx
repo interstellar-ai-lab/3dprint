@@ -3,9 +3,9 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { Navigation } from './components/Navigation';
 import { Hero } from './components/Hero';
-import { Features } from './components/Features';
+// import { Features } from './components/Features';
 import { MarketSection } from './components/MarketSection';
-import { TeamSection } from './components/TeamSection';
+// import { TeamSection } from './components/TeamSection';
 import { DemoSection } from './components/DemoSection';
 import { Studio } from './components/Studio';
 import { Footer } from './components/Footer';
@@ -24,9 +24,9 @@ const HomePage: React.FC = () => {
       <Hero />
       
       {/* Features Section */}
-      <section id="features">
+      {/* <section id="features">
         <Features />
-      </section>
+      </section> */}
       
       {/* Demo Section */}
       <section id="demo">
@@ -39,9 +39,9 @@ const HomePage: React.FC = () => {
       </section>
       
       {/* Team Section */}
-      <section id="team">
+      {/* <section id="team">
         <TeamSection />
-      </section>
+      </section> */}
       
       {/* Footer */}
       <Footer />
