@@ -1596,6 +1596,77 @@ def proxy_file():
         logger.error(f"Error proxying file: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/waitlist', methods=['POST'])
+def join_waitlist():
+    """Add email to waitlist"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        
+        if not email:
+            return jsonify({'error': 'Email is required'}), 400
+        
+        # Basic email validation
+        if '@' not in email or '.' not in email:
+            return jsonify({'error': 'Invalid email format'}), 400
+        
+        if not SUPABASE_AVAILABLE:
+            return jsonify({'error': 'Database not available'}), 500
+        
+        # Check if email already exists
+        existing = supabase_client.table('waitlist_signups').select('email').eq('email', email).execute()
+        
+        if existing.data:
+            return jsonify({'message': 'Email already registered', 'status': 'exists'}), 200
+        
+        # Insert new email
+        result = supabase_client.table('waitlist_signups').insert({
+            'email': email,
+            'source': 'website',
+            'metadata': {
+                'user_agent': request.headers.get('User-Agent', ''),
+                'referrer': request.headers.get('Referer', ''),
+                'ip_address': request.remote_addr
+            }
+        }).execute()
+        
+        logger.info(f"✅ New waitlist signup: {email}")
+        
+        return jsonify({
+            'message': 'Successfully joined waitlist',
+            'status': 'success',
+            'email': email
+        }), 201
+        
+    except Exception as e:
+        logger.error(f"❌ Waitlist signup error: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/waitlist/stats', methods=['GET'])
+def waitlist_stats():
+    """Get waitlist statistics (admin only)"""
+    try:
+        if not SUPABASE_AVAILABLE:
+            return jsonify({'error': 'Database not available'}), 500
+        
+        # Get total count
+        total = supabase_client.table('waitlist_signups').select('id', count='exact').execute()
+        
+        # Get recent signups (last 7 days)
+        from datetime import datetime, timedelta
+        week_ago = (datetime.now() - timedelta(days=7)).isoformat()
+        recent = supabase_client.table('waitlist_signups').select('id', count='exact').gte('created_at', week_ago).execute()
+        
+        return jsonify({
+            'total_signups': total.count,
+            'recent_signups': recent.count,
+            'last_updated': datetime.now().isoformat()
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Waitlist stats error: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
 if __name__ == '__main__':
     # For production deployment on EC2
     app.run(debug=False, host='0.0.0.0', port=8001) 
