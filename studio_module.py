@@ -50,10 +50,14 @@ class StudioSupabaseManager:
             bucket_name: Name of the storage bucket (default: generated-images-bucket)
         """
         self.supabase_url = supabase_url or os.getenv('SUPABASE_URL')
-        self.supabase_key = supabase_key or os.getenv('SUPABASE_ANON_KEY')
+        self.supabase_key = supabase_key or os.getenv('SUPABASE_SERVICE_KEY')
         self.bucket_name = bucket_name
         self.client: Optional[Client] = None
         self._authenticated = False
+        
+        # Storage bucket configuration
+        self.image_bucket = "generated-images-bucket"
+        self.model_3d_bucket = "generated-3d-files"
         
         # Database configuration (if needed for metadata)
         self.db_config = {
@@ -478,6 +482,98 @@ class StudioSupabaseManager:
                 
         except Exception as e:
             result["error"] = f"Error searching images: {e}"
+            logger.error(f"❌ {result['error']}")
+            
+        return result
+
+    def delete_image(self, image_id: int) -> Dict[str, Any]:
+        """
+        Delete an image and its associated 3D model from storage and database
+        
+        Args:
+            image_id: ID of the image in the database
+            
+        Returns:
+            Dict containing success status and deletion info
+        """
+        result = {
+            "success": False,
+            "error": None,
+            "deleted_files": [],
+            "deleted_record_id": None
+        }
+        
+        if not self._authenticated or not self.client:
+            result["error"] = "Client not initialized. Call initialize() first."
+            return result
+            
+        if not image_id:
+            result["error"] = "image_id is required"
+            return result
+            
+        try:
+            # First, get the image record to find the file paths
+            response = self.client.table('generated_images').select('*').eq('id', image_id).execute()
+            
+            if not response.data or len(response.data) == 0:
+                result["error"] = f"Image with ID {image_id} not found in database"
+                return result
+            
+            record = response.data[0]
+            image_url = record.get('image_url', '')
+            model_3d_url = record.get('3d_url', '')
+            
+            # Extract file paths from URLs
+            deleted_files = []
+            
+            # Delete image file from storage if URL exists
+            if image_url:
+                try:
+                    # Extract filename from URL
+                    image_filename = image_url.split('/')[-1]
+                    if image_filename and '.' in image_filename:
+                        # Delete from image bucket
+                        logger.info(f"🗑️ Attempting to delete image file '{image_filename}' from bucket '{self.image_bucket}'")
+                        storage_response = self.client.storage.from_(self.image_bucket).remove([image_filename])
+                        if storage_response:
+                            deleted_files.append(f"Image: {image_filename}")
+                            logger.info(f"✅ Deleted image file: {image_filename}")
+                        else:
+                            logger.warning(f"⚠️ Failed to delete image file: {image_filename}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Error deleting image file: {e}")
+            
+            # Delete 3D model file from storage if URL exists
+            if model_3d_url:
+                try:
+                    # Extract filename from URL
+                    model_filename = model_3d_url.split('/')[-1]
+                    if model_filename and '.' in model_filename:
+                        # Delete from 3D model bucket
+                        logger.info(f"🗑️ Attempting to delete 3D model file '{model_filename}' from bucket '{self.model_3d_bucket}'")
+                        storage_response = self.client.storage.from_(self.model_3d_bucket).remove([model_filename])
+                        if storage_response:
+                            deleted_files.append(f"3D Model: {model_filename}")
+                            logger.info(f"✅ Deleted 3D model file: {model_filename}")
+                        else:
+                            logger.warning(f"⚠️ Failed to delete 3D model file: {model_filename}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Error deleting 3D model file: {e}")
+            
+            # Delete the database record
+            delete_response = self.client.table('generated_images').delete().eq('id', image_id).execute()
+            
+            if delete_response.data and len(delete_response.data) > 0:
+                result["success"] = True
+                result["deleted_record_id"] = image_id
+                result["deleted_files"] = deleted_files
+                logger.info(f"✅ Deleted image record with ID: {image_id}")
+            else:
+                result["error"] = "Failed to delete database record"
+                logger.error(f"❌ Failed to delete database record for ID: {image_id}")
+                
+        except Exception as e:
+            result["error"] = f"Error deleting image: {e}"
             logger.error(f"❌ {result['error']}")
             
         return result

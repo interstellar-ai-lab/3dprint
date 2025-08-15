@@ -1575,6 +1575,41 @@ def insert_supabase_studio_image():
         logger.error(f"Error inserting Supabase studio image: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/studio/supabase/images/<int:image_id>', methods=['DELETE'])
+def delete_supabase_studio_image(image_id):
+    """Delete an image and its associated 3D model from storage and database"""
+    try:
+        if not SUPABASE_STUDIO_AVAILABLE:
+            return jsonify({"error": "Supabase Studio functionality not available"}), 503
+        
+        if not image_id:
+            return jsonify({"error": "Image ID is required"}), 400
+        
+        # Create Supabase studio manager
+        supabase_manager = create_supabase_studio_manager()
+        
+        # Initialize the manager
+        init_result = supabase_manager.initialize()
+        if not init_result["success"]:
+            return jsonify({"error": f"Supabase initialization failed: {init_result['error']}"}), 503
+        
+        # Delete image
+        result = supabase_manager.delete_image(image_id=image_id)
+        
+        if result["success"]:
+            return jsonify({
+                "success": True,
+                "deleted_record_id": result["deleted_record_id"],
+                "deleted_files": result["deleted_files"],
+                "message": f"Successfully deleted image ID {image_id}"
+            })
+        else:
+            return jsonify({"error": result["error"]}), 500
+            
+    except Exception as e:
+        logger.error(f"Error deleting Supabase studio image: {e}")
+        return jsonify({"error": str(e)}), 500
+
 
 
 @app.route('/api/studio/proxy-file')

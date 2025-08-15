@@ -300,6 +300,40 @@ export const Studio: React.FC = () => {
     };
   }, []);
 
+  // Handle image deletion
+  const handleDeleteImage = async (imageId: number) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/studio/supabase/images/${imageId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Remove the deleted image from the list
+        setImages(prevImages => prevImages.filter(img => img.id !== imageId));
+        
+        // If the deleted image was selected, clear the selection
+        if (selected3DModel && selected3DModel.id === imageId) {
+          setSelected3DModel(null);
+        }
+        
+        // Show success message
+        console.log('✅ Image deleted successfully:', data.message);
+        alert(`Image deleted successfully! Deleted files: ${data.deleted_files.join(', ')}`);
+      } else {
+        console.error('❌ Failed to delete image:', data.error);
+        alert(`Failed to delete image: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('❌ Error deleting image:', error);
+      alert('Error deleting image. Please try again.');
+    }
+  };
+
   const handleOrderClick = (event?: React.MouseEvent) => {
     if (event) {
       event.stopPropagation();
@@ -470,6 +504,7 @@ export const Studio: React.FC = () => {
                     // UI state
                     isSelected={selected3DModel?.name === image.name}
                     onClick={() => handleImageClick(image)}
+                    onDelete={handleDeleteImage}
                   />
                 ))}
               </div>
