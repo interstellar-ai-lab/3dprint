@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 export const Hero: React.FC = () => {
-  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8001';
+  const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://vicino.ai';
   const [isWaitlistModalOpen, setIsWaitlistModalOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
