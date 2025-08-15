@@ -68,6 +68,17 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY not found in environment variables")
 
+# Image generation configuration
+DEFAULT_IMAGE_SIZE = "1024x1024"  # Default to portrait to avoid cutting off objects
+SUPPORTED_IMAGE_SIZES = ["1024x1024", "1024x1536", "1536x1024"]
+
+# Validate image size
+if DEFAULT_IMAGE_SIZE not in SUPPORTED_IMAGE_SIZES:
+    logger.warning(f"⚠️ Invalid DEFAULT_IMAGE_SIZE '{DEFAULT_IMAGE_SIZE}', using '1024x1024'")
+    DEFAULT_IMAGE_SIZE = "1024x1024"
+
+logger.info(f"🎨 Using default image size: {DEFAULT_IMAGE_SIZE}")
+
 openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 openai_sync_client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -265,7 +276,7 @@ def download_image_to_pil_sync(image_url: str) -> Optional[Image.Image]:
         logger.error(f"Error loading image from {image_url}: {e}")
         return None
 
-def generate_multiview_with_gpt_image1(target_object: str, iteration: int = 1, previous_feedback: List[str] = None, previous_image_url: str = None, user_feedback: str = None) -> str:
+def generate_multiview_with_gpt_image1(target_object: str, iteration: int = 1, previous_feedback: List[str] = None, previous_image_url: str = None, user_feedback: str = None, image_size: str = DEFAULT_IMAGE_SIZE) -> str:
     """Generate 2x2 multiview image using GPT-Image-1 with image-to-image capability"""
     
     # Create the generation instructions
@@ -327,7 +338,7 @@ CRITICAL: The user's specific request above MUST be prioritized and implemented.
             response = openai_sync_client.images.generate(
                 model="gpt-image-1",
                 prompt=instructions,
-                size="1024x1024",
+                size=image_size,
             )
         else:
             # For subsequent iterations - image edit with feedback
@@ -340,7 +351,7 @@ CRITICAL: The user's specific request above MUST be prioritized and implemented.
                 response = openai_sync_client.images.generate(
                     model="gpt-image-1",
                     prompt=instructions,
-                    size="1024x1024",
+                    size=image_size,
                 )
             else:
                 # Create edit instructions based on feedback with user feedback priority
@@ -399,7 +410,7 @@ OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION."""
                         mask=mask_file,
                         prompt=edit_instructions,
                         n=1,
-                        size="1024x1024"
+                        size=image_size
                     )
         
         if hasattr(response, 'data') and response.data:
@@ -740,7 +751,7 @@ def save_metadata(session_id: str, iteration: int, target_object: str, image_url
     
     return str(metadata_file)
 
-def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: str = "quick") -> Dict:
+def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: str = "quick", image_size: str = DEFAULT_IMAGE_SIZE) -> Dict:
     """Run iterative hybrid multiview generation with different modes"""
     
     session_id = session_id
@@ -764,6 +775,7 @@ def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: s
         "status": "running",
         "target_object": target_object,
         "mode": mode,
+        "image_size": image_size,
         "max_iterations": max_iterations,
         "current_iteration": 0,
         "iterations": [],
@@ -791,7 +803,7 @@ def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: s
             logger.info(f"🎯 Using user feedback for iteration {iteration}: {user_feedback_for_this_iteration}")
         
         # Generate image with GPT-Image-1 (image-to-image for iterations > 1)
-        image_url = generate_multiview_with_gpt_image1(target_object, iteration, previous_feedback, previous_image_url, user_feedback_for_this_iteration)
+        image_url = generate_multiview_with_gpt_image1(target_object, iteration, previous_feedback, previous_image_url, user_feedback_for_this_iteration, image_size)
         
         if not image_url:
             active_sessions[session_id]["status"] = "failed"
@@ -911,6 +923,11 @@ def generate():
         data = request.get_json()
         target_object = data.get('target_object', '').strip()
         mode = data.get('mode', 'quick') # Default to 'quick' if not provided
+        image_size = data.get('image_size', DEFAULT_IMAGE_SIZE) # Get image size from request
+        
+        # Validate image size
+        if image_size not in SUPPORTED_IMAGE_SIZES:
+            return jsonify({"error": f"Invalid image_size. Supported sizes: {', '.join(SUPPORTED_IMAGE_SIZES)}"}), 400
         
         if not target_object:
             return jsonify({"error": "Target object is required"}), 400
@@ -921,7 +938,7 @@ def generate():
         # Start generation in background
         def run_generation():
             try:
-                run_hybrid_multiview_generation(session_id, target_object, mode)
+                run_hybrid_multiview_generation(session_id, target_object, mode, image_size)
             except Exception as e:
                 logger.error(f"Error in generation thread for session {session_id}: {e}")
                 if session_id in active_sessions:
@@ -959,6 +976,7 @@ def get_status(session_id):
             "status": session["status"],
             "target_object": session["target_object"],
             "mode": session["mode"],
+            "image_size": session.get("image_size", DEFAULT_IMAGE_SIZE),
             "max_iterations": session["max_iterations"],
             "current_iteration": session["current_iteration"],
             "iterations": session["iterations"],
@@ -1422,6 +1440,19 @@ def health():
         "status": "healthy", 
         "timestamp": datetime.now().isoformat(),
         "active_sessions": len(active_sessions)
+    })
+
+@app.route('/api/image-sizes')
+def get_image_sizes():
+    """Get supported image sizes for GPT-Image-1"""
+    return jsonify({
+        "supported_sizes": SUPPORTED_IMAGE_SIZES,
+        "default_size": DEFAULT_IMAGE_SIZE,
+        "descriptions": {
+            "1024x1024": "Square format - good for objects with similar width and height",
+            "1024x1536": "Portrait format - better for tall objects (e.g., people, buildings, trees)",
+            "1536x1024": "Landscape format - better for wide objects (e.g., cars, furniture, animals)"
+        }
     })
 
 # Studio API Routes (Supabase only)

@@ -35,13 +35,6 @@ export const StatusDisplay: React.FC = () => {
 
   if (!currentSession) return null;
 
-  // Debug logging
-  console.log('Current session state:', {
-    status: currentSession.status,
-    feedback_prompt: currentSession.feedback_prompt,
-    session_id: currentSession.session_id
-  });
-
   const getStatusIcon = () => {
     switch (currentSession.status) {
       case 'completed':

@@ -7,6 +7,7 @@ import { startGeneration, stopGeneration } from '../api/generationApi';
 export const GenerationForm: React.FC = () => {
   const [targetObject, setTargetObject] = useState('');
   const [mode, setMode] = useState<'quick' | 'deep'>('quick');
+  const [imageSize, setImageSize] = useState('1024x1024');
   const { currentSession, setCurrentSession, updateSession } = useGenerationStore();
 
   const generationMutation = useMutation(startGeneration, {
@@ -36,6 +37,7 @@ export const GenerationForm: React.FC = () => {
     generationMutation.mutate({
       target_object: targetObject.trim(),
       mode,
+      image_size: imageSize,
     });
   };
 
@@ -87,6 +89,28 @@ export const GenerationForm: React.FC = () => {
               ? 'Best for initial testing and rapid prototyping'
               : 'Best for production-quality results and final outputs'
             }
+          </p>
+        </div>
+
+        {/* Image Size Selection */}
+        <div>
+          <label htmlFor="imageSize" className="block text-sm font-medium text-gray-700 mb-2">
+            Image Size
+          </label>
+          <select
+            id="imageSize"
+            value={imageSize}
+            onChange={(e) => setImageSize(e.target.value)}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-colors"
+          >
+            <option value="1024x1024">📐 Square (1024×1024) - Good for most objects (default)</option>
+            <option value="1024x1536">📏 Portrait (1024×1536) - Better for tall objects</option>
+            <option value="1536x1024">📐 Landscape (1536×1024) - Better for wide objects</option>
+          </select>
+          <p className="mt-2 text-sm text-gray-600">
+            {imageSize === '1024x1024' && 'Best for objects with similar width and height (e.g., coffee mugs, balls)'}
+            {imageSize === '1024x1536' && 'Best for tall objects (e.g., people, buildings, trees, bottles)'}
+            {imageSize === '1536x1024' && 'Best for wide objects (e.g., cars, furniture, animals, laptops)'}
           </p>
         </div>
 

@@ -13,6 +13,7 @@ const api = axios.create({
 export interface GenerationRequest {
   target_object: string;
   mode: 'quick' | 'deep';
+  image_size?: string;
 }
 
 export const startGeneration = async (request: GenerationRequest): Promise<GenerationSession> => {

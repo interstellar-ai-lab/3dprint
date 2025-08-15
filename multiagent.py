@@ -56,11 +56,14 @@ async def generate_image_with_dalle3(prompt: str) -> str:
     try:
         print(f"🎨 Generating image with DALL-E 3: {prompt[:50]}...")
         
+        # Get image size from environment or use default
+        image_size = os.getenv("DEFAULT_IMAGE_SIZE", "1024x1024")
+        
         response = await asyncio.to_thread(
             openai_sync_client.images.generate,
             model="dall-e-3",
             prompt=prompt,
-            size="1024x1024",
+            size=image_size,
             quality="standard"
         )
         
