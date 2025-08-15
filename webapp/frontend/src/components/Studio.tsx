@@ -49,13 +49,34 @@ export const Studio: React.FC = () => {
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
 
   const [selected3DModel, setSelected3DModel] = useState<StudioImage | null>(null);
-
-
   const [orderModalOpen, setOrderModalOpen] = useState(false);
 
+  // Mobile responsive state
+  const [isMobile, setIsMobile] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [showProperties, setShowProperties] = useState(false);
+  const [activePanel, setActivePanel] = useState<'library' | 'viewer' | 'properties'>('viewer');
 
   // API base URL - adjust this according to your backend setup
   const API_BASE = process.env.REACT_APP_API_URL || 'https://vicino.ai';
+
+  // Check if device is mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+      if (window.innerWidth >= 768) {
+        setShowSidebar(true);
+        setShowProperties(true);
+      } else {
+        setShowSidebar(false);
+        setShowProperties(false);
+      }
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const fetchImages = async (search: string = '') => {
     try {
@@ -386,129 +407,205 @@ export const Studio: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Modern Header with Glass Effect */}
       <div className="bg-white/10 backdrop-blur-md border-b border-white/20 sticky top-0 z-40">
-        <div className="container mx-auto px-6 py-4">
+        <div className="container mx-auto px-4 md:px-6 py-3 md:py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-6">
+            <div className="flex items-center space-x-3 md:space-x-6">
               <button
                 onClick={handleBackClick}
                 className="flex items-center text-white/70 hover:text-white transition-all duration-200 group"
               >
-                <svg className="w-5 h-5 mr-2 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
-                Back
+                <span className="hidden sm:inline">Back</span>
               </button>
               <div>
-                <h1 className="text-2xl font-bold text-white">Vicino 3D Studio</h1>
-                <p className="text-white/60 text-sm">
+                <h1 className="text-lg md:text-2xl font-bold text-white">Vicino 3D Studio</h1>
+                <p className="text-white/60 text-xs md:text-sm">
                   Professional 3D Model Viewer
-                  <span className="text-white/40 ml-2">
-                    • {images.length} models available
+                  <span className="text-white/40 ml-1 md:ml-2">
+                    • {images.length} models
                   </span>
                 </p>
               </div>
             </div>
             
-            {/* Modern Search */}
-            <form onSubmit={handleSearch} className="flex">
-              <div className="relative">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search models..."
-                  className="pl-10 pr-4 py-2 bg-white/10 backdrop-blur border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-400/50 focus:border-purple-400/50 transition-all w-64"
-                />
-                <svg className="w-5 h-5 text-white/50 absolute left-3 top-1/2 transform -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
+            {/* Mobile Menu Button */}
+            {isMobile && (
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setShowSidebar(!showSidebar)}
+                  className="p-2 text-white/70 hover:text-white transition-all"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setShowProperties(!showProperties)}
+                  className="p-2 text-white/70 hover:text-white transition-all"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </button>
               </div>
-              <button
-                type="submit"
-                disabled={searchLoading}
-                className="ml-2 px-4 py-2 bg-purple-500/20 backdrop-blur text-white rounded-lg hover:bg-purple-500/30 transition-all disabled:opacity-50 border border-purple-400/30"
-              >
-                {searchLoading ? '⟳' : '→'}
-              </button>
-            </form>
+            )}
+            
+            {/* Modern Search - Hidden on mobile, shown in sidebar */}
+            {!isMobile && (
+              <form onSubmit={handleSearch} className="flex">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search models..."
+                    className="pl-10 pr-4 py-2 bg-white/10 backdrop-blur border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-400/50 focus:border-purple-400/50 transition-all w-64"
+                  />
+                  <svg className="w-5 h-5 text-white/50 absolute left-3 top-1/2 transform -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <button
+                  type="submit"
+                  disabled={searchLoading}
+                  className="ml-2 px-4 py-2 bg-purple-500/20 backdrop-blur text-white rounded-lg hover:bg-purple-500/30 transition-all disabled:opacity-50 border border-purple-400/30"
+                >
+                  {searchLoading ? '⟳' : '→'}
+                </button>
+              </form>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Modern Layout - Three Panel Design */}
+      {/* Modern Layout - Responsive Design */}
       <div className="flex h-screen">
         {/* Left Sidebar - Model Library */}
-        <div className="w-80 bg-slate-900/50 backdrop-blur border-r border-purple-500/20 overflow-y-auto">
-          <div className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white">Model Library</h2>
-              <div className="flex items-center space-x-2">
-                {pendingJobs.size > 0 && (
-                  <div className="flex items-center text-yellow-400 text-sm">
-                    <div className="w-2 h-2 bg-yellow-400 rounded-full mr-2 animate-pulse"></div>
-                    Monitoring {pendingJobs.size} job{pendingJobs.size > 1 ? 's' : ''}
+        <div className={`
+          ${isMobile ? 'fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 ease-in-out' : 'relative'}
+          ${showSidebar ? 'translate-x-0' : '-translate-x-full'}
+          ${!isMobile ? 'translate-x-0' : ''}
+          w-80 bg-slate-900/50 backdrop-blur border-r border-purple-500/20 overflow-y-auto
+        `}>
+          {/* Mobile overlay */}
+          {isMobile && showSidebar && (
+            <div 
+              className="fixed inset-0 bg-black/50 z-40"
+              onClick={() => setShowSidebar(false)}
+            />
+          )}
+          
+          <div className="relative z-50 h-full flex flex-col">
+            {/* Mobile header */}
+            {isMobile && (
+              <div className="flex items-center justify-between p-4 border-b border-white/10">
+                <h2 className="text-lg font-semibold text-white">Model Library</h2>
+                <button
+                  onClick={() => setShowSidebar(false)}
+                  className="p-2 text-white/70 hover:text-white transition-all"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            )}
+            
+            <div className="flex-1 p-4">
+              {/* Mobile search */}
+              {isMobile && (
+                <form onSubmit={handleSearch} className="mb-4">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search models..."
+                      className="w-full pl-10 pr-4 py-2 bg-white/10 backdrop-blur border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-400/50 focus:border-purple-400/50 transition-all"
+                    />
+                    <svg className="w-5 h-5 text-white/50 absolute left-3 top-1/2 transform -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
                   </div>
-                )}
-                <div className="text-sm text-white/60">{images.length} models</div>
+                </form>
+              )}
+              
+              <div className="flex items-center justify-between mb-4">
+                {!isMobile && <h2 className="text-lg font-semibold text-white">Model Library</h2>}
+                <div className="flex items-center space-x-2">
+                  {pendingJobs.size > 0 && (
+                    <div className="flex items-center text-yellow-400 text-sm">
+                      <div className="w-2 h-2 bg-yellow-400 rounded-full mr-2 animate-pulse"></div>
+                      <span className="hidden sm:inline">Monitoring {pendingJobs.size} job{pendingJobs.size > 1 ? 's' : ''}</span>
+                      <span className="sm:hidden">{pendingJobs.size}</span>
+                    </div>
+                  )}
+                  <div className="text-sm text-white/60">{images.length} models</div>
+                </div>
               </div>
+
+              {error && (
+                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 mb-4">
+                  <div className="flex items-center">
+                    <svg className="h-5 w-5 text-red-400 mr-3" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                    <p className="text-red-300 text-sm">{error}</p>
+                  </div>
+                </div>
+              )}
+
+              {images.length === 0 && !error ? (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
+                    <svg className="w-8 h-8 text-white/40" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                      <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                  <h3 className="text-white/70 font-medium mb-2">No models found</h3>
+                  <p className="text-white/50 text-sm">
+                    {searchQuery ? 'Try a different search term.' : 'The database is empty or not accessible.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {images.map((image) => (
+                    <ImageCard
+                      key={image.id || image.name}
+                      // Database fields
+                      id={image.id}
+                      created_at={image.created_at}
+                      target_object={image.target_object}
+                      iteration={image.iteration}
+                      image_url={image.image_url}
+                      model_3d_url={image.model_3d_url || image["3d_url"]}
+                      
+                      // Display fields
+                      name={image.name}
+                      filename={image.filename}
+                      size={image.size}
+                      updated={image.updated}
+                      content_type={image.content_type}
+                      public_url={image.public_url}
+                      thumbnail_url={image.thumbnail_url}
+                      zipurl={image.zipurl}
+                      has_3d_model={image.has_3d_model}
+                      authenticated_url={image.authenticated_url}
+                      
+                      // UI state
+                      isSelected={selected3DModel?.name === image.name}
+                      onClick={() => {
+                        handleImageClick(image);
+                        if (isMobile) setShowSidebar(false);
+                      }}
+                      onDelete={handleDeleteImage}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-
-            {error && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 mb-4">
-                <div className="flex items-center">
-                  <svg className="h-5 w-5 text-red-400 mr-3" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                  <p className="text-red-300 text-sm">{error}</p>
-                </div>
-              </div>
-            )}
-
-            {images.length === 0 && !error ? (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
-                  <svg className="w-8 h-8 text-white/40" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <h3 className="text-white/70 font-medium mb-2">No models found</h3>
-                <p className="text-white/50 text-sm">
-                  {searchQuery ? 'Try a different search term.' : 'The database is empty or not accessible.'}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {images.map((image) => (
-                  <ImageCard
-                    key={image.id || image.name}
-                    // Database fields
-                    id={image.id}
-                    created_at={image.created_at}
-                    target_object={image.target_object}
-                    iteration={image.iteration}
-                    image_url={image.image_url}
-                    model_3d_url={image.model_3d_url || image["3d_url"]}
-                    
-                    // Display fields
-                    name={image.name}
-                    filename={image.filename}
-                    size={image.size}
-                    updated={image.updated}
-                    content_type={image.content_type}
-                    public_url={image.public_url}
-                    thumbnail_url={image.thumbnail_url}
-                    zipurl={image.zipurl}
-                    has_3d_model={image.has_3d_model}
-                    authenticated_url={image.authenticated_url}
-                    
-                    // UI state
-                    isSelected={selected3DModel?.name === image.name}
-                    onClick={() => handleImageClick(image)}
-                    onDelete={handleDeleteImage}
-                  />
-                ))}
-              </div>
-            )}
           </div>
         </div>
 
@@ -517,22 +614,44 @@ export const Studio: React.FC = () => {
           {selected3DModel ? (
             <div className="flex flex-col h-full">
               {/* Viewer Header */}
-              <div className="bg-white/5 backdrop-blur border-b border-white/10 p-4">
+              <div className="bg-white/5 backdrop-blur border-b border-white/10 p-3 md:p-4">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-700 rounded-lg flex items-center justify-center">
-                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="flex items-center space-x-2 md:space-x-4">
+                    <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-purple-500 to-purple-700 rounded-lg flex items-center justify-center">
+                      <svg className="w-4 h-4 md:w-6 md:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-white">{selected3DModel.filename}</h3>
-                      <p className="text-white/60 text-sm flex items-center">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm md:text-lg font-semibold text-white truncate">{selected3DModel.filename}</h3>
+                      <p className="text-white/60 text-xs md:text-sm flex items-center">
                         <span className="w-2 h-2 bg-purple-400 rounded-full mr-2 animate-pulse"></span>
                         Interactive 3D Model
                       </p>
                     </div>
                   </div>
+                  
+                  {/* Mobile controls */}
+                  {isMobile && (
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => setShowSidebar(true)}
+                        className="p-2 text-white/70 hover:text-white transition-all"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => setShowProperties(true)}
+                        className="p-2 text-white/70 hover:text-white transition-all"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
               
@@ -548,125 +667,174 @@ export const Studio: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex items-center justify-center">
+            <div className="flex-1 flex items-center justify-center p-4">
               <div className="text-center max-w-md">
-                <div className="w-24 h-24 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-purple-500/20 to-purple-300/20 flex items-center justify-center backdrop-blur border border-purple-300/20">
-                  <svg className="w-12 h-12 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-16 h-16 md:w-24 md:h-24 mx-auto mb-4 md:mb-6 rounded-2xl bg-gradient-to-br from-purple-500/20 to-purple-300/20 flex items-center justify-center backdrop-blur border border-purple-300/20">
+                  <svg className="w-8 h-8 md:w-12 md:h-12 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-3">Welcome to 3D Studio</h3>
-                <p className="text-white/60 leading-relaxed">
-                  Select a model from the library to begin exploring in 3D. 
-                  Use your mouse to rotate, zoom, and interact with the models.
+                <h3 className="text-lg md:text-xl font-semibold text-white mb-2 md:mb-3">Welcome to 3D Studio</h3>
+                <p className="text-white/60 leading-relaxed text-sm md:text-base">
+                  {isMobile ? (
+                    <>
+                      Tap the menu button to browse models. 
+                      Use touch gestures to interact with 3D models.
+                    </>
+                  ) : (
+                    <>
+                      Select a model from the library to begin exploring in 3D. 
+                      Use your mouse to rotate, zoom, and interact with the models.
+                    </>
+                  )}
                 </p>
-                <div className="mt-6 flex items-center justify-center space-x-6 text-sm text-white/40">
+                <div className="mt-4 md:mt-6 flex items-center justify-center space-x-4 md:space-x-6 text-xs md:text-sm text-white/40">
                   <div className="flex items-center">
-                    <div className="w-2 h-2 bg-purple-400 rounded-full mr-2"></div>
-                    Drag to rotate
+                    <div className="w-2 h-2 bg-purple-400 rounded-full mr-1 md:mr-2"></div>
+                    {isMobile ? 'Touch to rotate' : 'Drag to rotate'}
                   </div>
                   <div className="flex items-center">
-                    <div className="w-2 h-2 bg-blue-400 rounded-full mr-2"></div>
-                    Scroll to zoom
+                    <div className="w-2 h-2 bg-blue-400 rounded-full mr-1 md:mr-2"></div>
+                    {isMobile ? 'Pinch to zoom' : 'Scroll to zoom'}
                   </div>
                 </div>
+                
+                {/* Mobile call-to-action */}
+                {isMobile && (
+                  <button
+                    onClick={() => setShowSidebar(true)}
+                    className="mt-4 px-4 py-2 bg-purple-500/20 backdrop-blur text-white rounded-lg hover:bg-purple-500/30 transition-all border border-purple-400/30"
+                  >
+                    Browse Models
+                  </button>
+                )}
               </div>
             </div>
           )}
         </div>
 
         {/* Right Panel - Properties & Details */}
-        <div className="w-80 bg-slate-900/30 backdrop-blur border-l border-purple-500/20 overflow-y-auto">
-          {selected3DModel ? (
-            <div className="p-4">
-              <h2 className="text-lg font-semibold text-white mb-4">Model Properties</h2>
-              
-              {/* Model Info */}
-              <div className="bg-white/5 rounded-lg p-4 mb-4 backdrop-blur border border-white/10">
-                <h3 className="text-white font-medium mb-3">Details</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-white/60">File name:</span>
-                    <span className="text-white">{selected3DModel.filename}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Last updated:</span>
-                    <span className="text-white">{formatDate(selected3DModel.updated || selected3DModel.created_at || null)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Type:</span>
-                    <span className="text-white">{selected3DModel.content_type}</span>
-                  </div>
-                  {selected3DModel.target_object && (
-                    <div className="flex justify-between">
-                      <span className="text-white/60">Target Object:</span>
-                      <span className="text-white">{selected3DModel.target_object}</span>
-                    </div>
-                  )}
-                  {selected3DModel.iteration && (
-                    <div className="flex justify-between">
-                      <span className="text-white/60">Iteration:</span>
-                      <span className="text-white">{selected3DModel.iteration}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-
-
-              {/* Actions */}
-              <div className="space-y-3">
-                {/* Order 3D Print Button */}
-                <button
-                  onClick={handleOrderClick}
-                  className="flex items-center justify-center w-full px-4 py-3 bg-gradient-to-r from-green-500 to-green-700 text-white rounded-lg hover:from-green-600 hover:to-green-800 transition-all font-medium shadow-lg"
-                >
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                  </svg>
-                  Order 3D Print
-                </button>
-
-                <a
-                  href={selected3DModel.public_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-purple-700 text-white rounded-lg hover:from-purple-600 hover:to-purple-800 transition-all font-medium"
-                >
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                  View Original Image
-                </a>
-                
-                {(selected3DModel.model_3d_url || selected3DModel.zipurl) && (
-                  <a
-                    href={selected3DModel.model_3d_url || selected3DModel.zipurl || ''}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center w-full px-4 py-3 bg-white/10 backdrop-blur text-white rounded-lg hover:bg-white/20 transition-all border border-white/20"
-                  >
-                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
-                    </svg>
-                    Download 3D Model
-                  </a>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="p-4">
-              <h2 className="text-lg font-semibold text-white mb-4">Properties</h2>
-              <div className="text-center py-8">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
-                  <svg className="w-8 h-8 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <p className="text-white/50 text-sm">Select a model to view its properties and details.</p>
-              </div>
-            </div>
+        <div className={`
+          ${isMobile ? 'fixed inset-y-0 right-0 z-50 transform transition-transform duration-300 ease-in-out' : 'relative'}
+          ${showProperties ? 'translate-x-0' : 'translate-x-full'}
+          ${!isMobile ? 'translate-x-0' : ''}
+          w-80 bg-slate-900/30 backdrop-blur border-l border-purple-500/20 overflow-y-auto
+        `}>
+          {/* Mobile overlay */}
+          {isMobile && showProperties && (
+            <div 
+              className="fixed inset-0 bg-black/50 z-40"
+              onClick={() => setShowProperties(false)}
+            />
           )}
+          
+          <div className="relative z-50 h-full flex flex-col">
+            {/* Mobile header */}
+            {isMobile && (
+              <div className="flex items-center justify-between p-4 border-b border-white/10">
+                <h2 className="text-lg font-semibold text-white">Properties</h2>
+                <button
+                  onClick={() => setShowProperties(false)}
+                  className="p-2 text-white/70 hover:text-white transition-all"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            )}
+            
+            <div className="flex-1 p-4">
+              {selected3DModel ? (
+                <>
+                  {!isMobile && <h2 className="text-lg font-semibold text-white mb-4">Model Properties</h2>}
+                  
+                  {/* Model Info */}
+                  <div className="bg-white/5 rounded-lg p-4 mb-4 backdrop-blur border border-white/10">
+                    <h3 className="text-white font-medium mb-3">Details</h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-white/60">File name:</span>
+                        <span className="text-white truncate ml-2">{selected3DModel.filename}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/60">Last updated:</span>
+                        <span className="text-white">{formatDate(selected3DModel.updated || selected3DModel.created_at || null)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/60">Type:</span>
+                        <span className="text-white">{selected3DModel.content_type}</span>
+                      </div>
+                      {selected3DModel.target_object && (
+                        <div className="flex justify-between">
+                          <span className="text-white/60">Target Object:</span>
+                          <span className="text-white truncate ml-2">{selected3DModel.target_object}</span>
+                        </div>
+                      )}
+                      {selected3DModel.iteration && (
+                        <div className="flex justify-between">
+                          <span className="text-white/60">Iteration:</span>
+                          <span className="text-white">{selected3DModel.iteration}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="space-y-3">
+                    {/* Order 3D Print Button */}
+                    <button
+                      onClick={handleOrderClick}
+                      className="flex items-center justify-center w-full px-4 py-3 bg-gradient-to-r from-green-500 to-green-700 text-white rounded-lg hover:from-green-600 hover:to-green-800 transition-all font-medium shadow-lg"
+                    >
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                      </svg>
+                      Order 3D Print
+                    </button>
+
+                    <a
+                      href={selected3DModel.public_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-purple-700 text-white rounded-lg hover:from-purple-600 hover:to-purple-800 transition-all font-medium"
+                    >
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      View Original Image
+                    </a>
+                    
+                    {(selected3DModel.model_3d_url || selected3DModel.zipurl) && (
+                      <a
+                        href={selected3DModel.model_3d_url || selected3DModel.zipurl || ''}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center w-full px-4 py-3 bg-white/10 backdrop-blur text-white rounded-lg hover:bg-white/20 transition-all border border-white/20"
+                      >
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                        </svg>
+                        Download 3D Model
+                      </a>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  {!isMobile && <h2 className="text-lg font-semibold text-white mb-4">Properties</h2>}
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
+                      <svg className="w-8 h-8 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <p className="text-white/50 text-sm">Select a model to view its properties and details.</p>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 

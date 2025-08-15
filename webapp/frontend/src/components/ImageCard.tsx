@@ -98,9 +98,9 @@ export const ImageCard: React.FC<ImageCardProps> = ({
       }`}
       onClick={onClick}
     >
-      <div className="flex p-3">
+      <div className="flex p-2 md:p-3">
         {/* Thumbnail */}
-        <div className="relative w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
+        <div className="relative w-12 h-12 md:w-16 md:h-16 rounded-lg overflow-hidden flex-shrink-0">
           <img
             src={public_url}
             alt={displayName}
@@ -125,11 +125,11 @@ export const ImageCard: React.FC<ImageCardProps> = ({
         </div>
 
         {/* Info */}
-        <div className="ml-3 flex-1 min-w-0">
-          <h3 className="font-medium text-white truncate text-sm" title={displayName}>
+        <div className="ml-2 md:ml-3 flex-1 min-w-0">
+          <h3 className="font-medium text-white truncate text-xs md:text-sm" title={displayName}>
             {displayName}
           </h3>
-          <div className="mt-1 space-y-1">
+          <div className="mt-1 space-y-0.5 md:space-y-1">
             <p className="text-white/40 text-xs">{formatDate(displayDate)}</p>
             {iteration !== null && iteration !== undefined && (
               <p className="text-white/40 text-xs">Iteration: {iteration}</p>
@@ -153,7 +153,7 @@ export const ImageCard: React.FC<ImageCardProps> = ({
 
         {/* Actions */}
         <div className="flex flex-col items-end justify-between">
-          <div className="flex space-x-1">
+          <div className="flex space-x-0.5 md:space-x-1">
             <button
               onClick={(e) => {
                 e.stopPropagation();

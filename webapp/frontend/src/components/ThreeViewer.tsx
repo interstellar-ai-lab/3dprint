@@ -92,6 +92,23 @@ export const ThreeViewer: React.FC<ThreeViewerProps> = ({
     controls.enableDamping = true;
     controls.dampingFactor = 0.25;
     controls.enableZoom = true;
+    
+    // Mobile-specific settings
+    controls.enablePan = true;
+    controls.enableRotate = true;
+    controls.autoRotate = false;
+    controls.autoRotateSpeed = 2.0;
+    
+    // Touch-friendly settings
+    controls.touches = {
+      ONE: THREE.TOUCH.ROTATE,
+      TWO: THREE.TOUCH.DOLLY_PAN
+    };
+    
+    // Zoom limits for better mobile experience
+    controls.minDistance = 0.5;
+    controls.maxDistance = 20;
+    
     controlsRef.current = controls;
 
     // Animation loop
