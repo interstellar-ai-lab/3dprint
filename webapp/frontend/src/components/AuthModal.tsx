@@ -61,9 +61,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return false;
     }
     
-    if (!password) {
-      setError('Password is required');
-      return false;
+    // Only validate password for signin and signup modes
+    if (mode !== 'forgot-password') {
+      if (!password) {
+        setError('Password is required');
+        return false;
+      }
     }
     
     if (mode === 'signup') {

@@ -12,6 +12,7 @@ import { DemoSection } from './components/DemoSection';
 import { Studio } from './components/Studio';
 import { Footer } from './components/Footer';
 import { AuthCallback } from './pages/AuthCallback';
+import { ResetPassword } from './pages/ResetPassword';
 import './App.css';
 
 const queryClient = new QueryClient();
@@ -70,6 +71,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/studio" element={<StudioPage />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="/auth/reset-password" element={<ResetPassword />} />
           </Routes>
         </Router>
         <GoogleOneTap />
