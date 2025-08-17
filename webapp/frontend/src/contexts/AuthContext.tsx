@@ -18,6 +18,9 @@ declare global {
 
 interface AuthContextType extends AuthState {
   signInWithGoogle: () => Promise<void>
+  signInWithEmail: (email: string, password: string) => Promise<{ error?: string }>
+  signUpWithEmail: (email: string, password: string) => Promise<{ error?: string, success?: boolean }>
+  resetPassword: (email: string) => Promise<{ error?: string, success?: boolean }>
   signOut: () => Promise<void>
   refreshUser: () => Promise<void>
   initializeGoogleOneTap: () => Promise<void>
@@ -71,6 +74,85 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Error signing in with Google:', error)
       throw error
+    }
+  }
+
+  const signInWithEmail = async (email: string, password: string) => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      })
+      
+      if (error) {
+        return { error: error.message }
+      }
+      
+      if (data.user) {
+        setUser({
+          id: data.user.id,
+          email: data.user.email || '',
+          user_metadata: data.user.user_metadata
+        })
+      }
+      
+      return {}
+    } catch (error) {
+      console.error('Error signing in with email:', error)
+      return { error: 'An unexpected error occurred' }
+    }
+  }
+
+  const signUpWithEmail = async (email: string, password: string) => {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`
+        }
+      })
+      
+      if (error) {
+        return { error: error.message }
+      }
+      
+      // Check if email confirmation is required
+      if (data.user && !data.session) {
+        return { success: true, error: 'Please check your email to confirm your account' }
+      }
+      
+      // If session exists, user is automatically signed in
+      if (data.user && data.session) {
+        setUser({
+          id: data.user.id,
+          email: data.user.email || '',
+          user_metadata: data.user.user_metadata
+        })
+        return { success: true }
+      }
+      
+      return { success: true }
+    } catch (error) {
+      console.error('Error signing up with email:', error)
+      return { error: 'An unexpected error occurred' }
+    }
+  }
+
+  const resetPassword = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`
+      })
+      
+      if (error) {
+        return { error: error.message }
+      }
+      
+      return { success: true }
+    } catch (error) {
+      console.error('Error resetting password:', error)
+      return { error: 'An unexpected error occurred' }
     }
   }
 
@@ -143,6 +225,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user,
     loading,
     signInWithGoogle,
+    signInWithEmail,
+    signUpWithEmail,
+    resetPassword,
     signOut,
     refreshUser,
     initializeGoogleOneTap

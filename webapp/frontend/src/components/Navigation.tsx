@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { GoogleSignInButton } from './GoogleSignInButton';
+import { AuthModal } from './AuthModal';
 
 export const Navigation: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'signin' | 'signup'>('signin');
   const { user, signOut, loading } = useAuth();
 
   useEffect(() => {
@@ -110,13 +112,34 @@ export const Navigation: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                <GoogleSignInButton 
-                  className="w-24"
-                  theme={isScrolled ? "outline" : "filled_blue"}
-                  size="medium"
-                  text="signin"
-                  shape="pill"
-                />
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => {
+                      setAuthModalMode('signin');
+                      setAuthModalOpen(true);
+                    }}
+                    className={`px-3 py-1 rounded text-sm font-medium transition-all ${
+                      isScrolled 
+                        ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' 
+                        : 'bg-white/20 text-white hover:bg-white/30'
+                    }`}
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAuthModalMode('signup');
+                      setAuthModalOpen(true);
+                    }}
+                    className={`px-3 py-1 rounded text-sm font-medium transition-all ${
+                      isScrolled 
+                        ? 'bg-purple-600 text-white hover:bg-purple-700' 
+                        : 'bg-purple-600 text-white hover:bg-purple-700'
+                    }`}
+                  >
+                    Sign Up
+                  </button>
+                </div>
               )}
             </div>
 
@@ -199,14 +222,27 @@ export const Navigation: React.FC = () => {
                     </button>
                   </div>
                 ) : (
-                  <div className="flex justify-center">
-                    <GoogleSignInButton 
-                      className="w-full"
-                      theme="outline"
-                      size="large"
-                      text="signin_with"
-                      shape="rectangular"
-                    />
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => {
+                        setAuthModalMode('signin');
+                        setAuthModalOpen(true);
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="w-full bg-gray-200 text-gray-700 px-3 py-2 rounded text-sm font-medium hover:bg-gray-300"
+                    >
+                      Sign In
+                    </button>
+                    <button
+                      onClick={() => {
+                        setAuthModalMode('signup');
+                        setAuthModalOpen(true);
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="w-full bg-purple-600 text-white px-3 py-2 rounded text-sm font-medium hover:bg-purple-700"
+                    >
+                      Sign Up
+                    </button>
                   </div>
                 )}
               </div>
@@ -220,6 +256,13 @@ export const Navigation: React.FC = () => {
           </div>
         )}
       </div>
+      
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        initialMode={authModalMode}
+      />
     </nav>
   );
 };
