@@ -11,7 +11,7 @@ import sys
 import uuid
 import pathlib
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 import base64
 from PIL import Image
@@ -20,6 +20,8 @@ from openai import OpenAI, AsyncOpenAI
 import aiohttp
 import threading
 import logging
+import stripe
+
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -131,6 +133,20 @@ def ensure_database_schema():
 
 # Run schema check on startup
 ensure_database_schema()
+
+# Stripe configuration for webhooks
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+
+if STRIPE_SECRET_KEY:
+    stripe.api_key = STRIPE_SECRET_KEY
+    logger.info("✅ Stripe configured for webhook processing")
+else:
+    logger.warning("⚠️ STRIPE_SECRET_KEY not found - webhooks will not work")
+
+# Payment link configuration
+PAYMENT_LINK_URL = "https://buy.stripe.com/9B68wP6qJ0in2wrfJzg3600"
+logger.info("✅ Payment link method configured")
 
 async def download_image_to_pil(image_url: str) -> Optional[Image.Image]:
     """Download image from URL and convert to PIL Image"""
@@ -1980,6 +1996,437 @@ def waitlist_stats():
     except Exception as e:
         logger.error(f"❌ Waitlist stats error: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
+
+# Wallet/Account Funding Endpoints (properly integrated with Supabase auth)
+@app.route('/api/wallet/balance', methods=['GET'])
+def get_wallet_balance():
+    """Get user's wallet balance using Supabase auth"""
+    try:
+        # Get authorization header
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'Authorization header required'}), 401
+        
+        token = auth_header.split(' ')[1]
+        
+        if not SUPABASE_AVAILABLE:
+            return jsonify({'error': 'Database not available'}), 500
+        
+        # Verify the JWT token and get user info
+        try:
+            # Use Supabase client to verify the token
+            user_response = supabase_client.auth.get_user(token)
+            user = user_response.user
+            
+            if not user:
+                return jsonify({'error': 'Invalid token'}), 401
+            
+            user_id = user.id  # This is the UID from Supabase Users table
+            
+        except Exception as e:
+            logger.error(f"❌ Token verification failed: {str(e)}")
+            return jsonify({'error': 'Invalid token'}), 401
+        
+        # Get user's wallet balance from Supabase
+        result = supabase_client.table('user_wallets').select('balance').eq('user_id', user_id).execute()
+        
+        if result.data:
+            balance = result.data[0]['balance']
+        else:
+            # Create wallet if it doesn't exist
+            balance = 0.0
+            supabase_client.table('user_wallets').insert({
+                'user_id': user_id,  # This links to Supabase Users.uid
+                'balance': balance,
+                'created_at': datetime.now(timezone.utc).isoformat(),
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }).execute()
+        
+        return jsonify({
+            'balance': balance,
+            'currency': 'USD',
+            'user_id': user_id,
+            'email': user.email
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error getting wallet balance: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/wallet/transactions', methods=['GET'])
+def get_transaction_history():
+    """Get user's transaction history using Supabase auth"""
+    try:
+        # Get authorization header
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'Authorization header required'}), 401
+        
+        token = auth_header.split(' ')[1]
+        
+        if not SUPABASE_AVAILABLE:
+            return jsonify({'error': 'Database not available'}), 500
+        
+        # Verify the JWT token and get user info
+        try:
+            user_response = supabase_client.auth.get_user(token)
+            user = user_response.user
+            
+            if not user:
+                return jsonify({'error': 'Invalid token'}), 401
+            
+            user_id = user.id  # Supabase Users.uid
+            
+        except Exception as e:
+            logger.error(f"❌ Token verification failed: {str(e)}")
+            return jsonify({'error': 'Invalid token'}), 401
+        
+        # Get transaction history from Supabase
+        result = supabase_client.table('wallet_transactions').select('*').eq('user_id', user_id).order('created_at', desc=True).limit(50).execute()
+        
+        return jsonify({
+            'transactions': result.data or []
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error getting transaction history: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/wallet/credit', methods=['POST'])
+def credit_wallet():
+    """Manually credit user's wallet (for payment link payments)"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        amount = data.get('amount')
+        payment_reference = data.get('payment_reference', 'manual_credit')
+        
+        if not user_id or not amount:
+            return jsonify({'error': 'User ID and amount required'}), 400
+        
+        if not SUPABASE_AVAILABLE:
+            return jsonify({'error': 'Database not available'}), 500
+        
+        # Get current balance
+        result = supabase_client.table('user_wallets').select('balance').eq('user_id', user_id).execute()
+        
+        if result.data:
+            current_balance = result.data[0]['balance']
+            new_balance = current_balance + float(amount)
+            
+            # Update balance
+            supabase_client.table('user_wallets').update({
+                'balance': new_balance,
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }).eq('user_id', user_id).execute()
+        else:
+            # Create wallet if it doesn't exist
+            new_balance = float(amount)
+            supabase_client.table('user_wallets').insert({
+                'user_id': user_id,  # Links to Supabase Users.uid
+                'balance': new_balance,
+                'created_at': datetime.now(timezone.utc).isoformat(),
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }).execute()
+        
+        # Record transaction
+        supabase_client.table('wallet_transactions').insert({
+            'user_id': user_id,  # Links to Supabase Users.uid
+            'type': 'funding',
+            'amount': float(amount),
+            'payment_intent_id': payment_reference,
+            'status': 'completed',
+            'description': f'Wallet funded with ${amount}',
+            'created_at': datetime.now(timezone.utc).isoformat()
+        }).execute()
+        
+        logger.info(f"✅ Wallet credited for user: {user_id}, new balance: ${new_balance}")
+        
+        return jsonify({
+            'success': True,
+            'new_balance': new_balance,
+            'message': 'Wallet credited successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error crediting wallet: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/wallet/credit-by-email', methods=['POST'])
+def credit_wallet_by_email():
+    """Credit user's wallet by email (admin function)"""
+    try:
+        data = request.get_json()
+        user_email = data.get('email')
+        amount = data.get('amount')
+        payment_reference = data.get('payment_reference', 'manual_credit')
+        
+        if not user_email or not amount:
+            return jsonify({'error': 'Email and amount required'}), 400
+        
+        if not SUPABASE_AVAILABLE:
+            return jsonify({'error': 'Database not available'}), 500
+        
+        # Find user by email
+        try:
+            # This requires admin privileges to query auth.users
+            # You might need to adjust this based on your Supabase setup
+            user_response = supabase_client.auth.admin.list_users()
+            user = None
+            for u in user_response.users:
+                if u.email == user_email:
+                    user = u
+                    break
+            
+            if not user:
+                return jsonify({'error': f'User with email {user_email} not found'}), 404
+            
+            user_id = user.id
+            
+        except Exception as e:
+            logger.error(f"❌ Error finding user by email: {str(e)}")
+            return jsonify({'error': 'Could not find user by email'}), 500
+        
+        # Get current balance
+        result = supabase_client.table('user_wallets').select('balance').eq('user_id', user_id).execute()
+        
+        if result.data:
+            current_balance = result.data[0]['balance']
+            new_balance = current_balance + float(amount)
+            
+            # Update balance
+            supabase_client.table('user_wallets').update({
+                'balance': new_balance,
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }).eq('user_id', user_id).execute()
+        else:
+            # Create wallet if it doesn't exist
+            new_balance = float(amount)
+            supabase_client.table('user_wallets').insert({
+                'user_id': user_id,
+                'balance': new_balance,
+                'created_at': datetime.now(timezone.utc).isoformat(),
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }).execute()
+        
+        # Record transaction
+        supabase_client.table('wallet_transactions').insert({
+            'user_id': user_id,
+            'type': 'funding',
+            'amount': float(amount),
+            'payment_intent_id': payment_reference,
+            'status': 'completed',
+            'description': f'Wallet funded with ${amount}',
+            'created_at': datetime.now(timezone.utc).isoformat()
+        }).execute()
+        
+        logger.info(f"✅ Wallet credited for user {user_email}, new balance: ${new_balance}")
+        
+        return jsonify({
+            'success': True,
+            'user_id': user_id,
+            'email': user_email,
+            'new_balance': new_balance,
+            'message': 'Wallet credited successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error crediting wallet by email: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/wallet/credit-by-user-id', methods=['POST'])
+def credit_wallet_by_user_id_endpoint():
+    """Credit wallet directly by user_id (admin method)"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        amount = data.get('amount')
+        payment_reference = data.get('payment_reference')
+        
+        if not user_id or not amount:
+            return jsonify({'error': 'user_id and amount are required'}), 400
+        
+        if amount <= 0:
+            return jsonify({'error': 'Amount must be positive'}), 400
+        
+        success = credit_wallet_by_user_id(user_id, amount, payment_reference)
+        
+        if success:
+            # Get updated balance
+            result = supabase_client.table('user_wallets').select('balance').eq('user_id', user_id).execute()
+            new_balance = result.data[0]['balance'] if result.data else amount
+            
+            return jsonify({
+                'success': True,
+                'user_id': user_id,
+                'new_balance': new_balance,
+                'message': 'Wallet credited successfully'
+            })
+        else:
+            return jsonify({'error': 'Failed to credit wallet'}), 500
+            
+    except Exception as e:
+        logger.error(f"❌ Error crediting wallet by user_id: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+def credit_wallet_by_user_id(user_id: str, amount: float, payment_intent_id: str = None) -> bool:
+    """Credit wallet directly by user_id (most efficient method)"""
+    try:
+        logger.info(f"💰 Crediting wallet for user_id: {user_id}, amount: ${amount}")
+        
+        # Get current balance
+        result = supabase_client.table('user_wallets').select('balance').eq('user_id', user_id).execute()
+        
+        if result.data:
+            current_balance = result.data[0]['balance']
+            new_balance = current_balance + amount
+            
+            # Update balance
+            supabase_client.table('user_wallets').update({
+                'balance': new_balance,
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }).eq('user_id', user_id).execute()
+        else:
+            # Create wallet if it doesn't exist
+            new_balance = amount
+            supabase_client.table('user_wallets').insert({
+                'user_id': user_id,
+                'balance': new_balance,
+                'created_at': datetime.now(timezone.utc).isoformat(),
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }).execute()
+        
+        # Record transaction
+        supabase_client.table('wallet_transactions').insert({
+            'user_id': user_id,
+            'type': 'funding',
+            'amount': amount,
+            'payment_intent_id': payment_intent_id,
+            'status': 'completed',
+            'description': f'Wallet funded with ${amount}',
+            'created_at': datetime.now(timezone.utc).isoformat()
+        }).execute()
+        
+        logger.info(f"✅ Wallet credited for user_id {user_id}: ${amount} -> ${new_balance}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Error crediting wallet for user_id {user_id}: {str(e)}")
+        return False
+
+def credit_wallet_by_email(email: str, amount: float, payment_intent_id: str = None) -> bool:
+    """Credit wallet by email (fallback method)"""
+    try:
+        logger.info(f"💰 Crediting wallet for email: {email}, amount: ${amount}")
+        
+        # Find user by email
+        user_response = supabase_client.auth.admin.list_users()
+        user = None
+        for u in user_response.users:
+            if u.email == email:
+                user = u
+                break
+        
+        if not user:
+            logger.warning(f"⚠️ User not found for email: {email}")
+            return False
+        
+        # Use the helper function to credit by user_id
+        return credit_wallet_by_user_id(user.id, amount, payment_intent_id)
+        
+    except Exception as e:
+        logger.error(f"❌ Error crediting wallet for email {email}: {str(e)}")
+        return False
+
+@app.route('/api/webhook/stripe', methods=['POST'])
+def stripe_webhook():
+    """Handle Stripe webhook events for automatic wallet crediting"""
+    payload = request.get_data(as_text=True)
+    sig_header = request.headers.get('Stripe-Signature')
+    
+    if not STRIPE_WEBHOOK_SECRET:
+        logger.warning("⚠️ STRIPE_WEBHOOK_SECRET not configured")
+        return jsonify({'error': 'Webhook secret not configured'}), 400
+    
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, STRIPE_WEBHOOK_SECRET
+        )
+    except ValueError as e:
+        logger.error(f"❌ Invalid payload: {str(e)}")
+        return jsonify({'error': 'Invalid payload'}), 400
+    except stripe.error.SignatureVerificationError as e:
+        logger.error(f"❌ Invalid signature: {str(e)}")
+        return jsonify({'error': 'Invalid signature'}), 400
+    
+    # Handle the event
+    if event['type'] == 'checkout.session.completed':
+        session = event['data']['object']
+        
+        logger.info(f"✅ Payment completed: {session['id']}")
+        
+        # Extract payment details
+        customer_email = session.get('customer_details', {}).get('email')
+        amount_total = session.get('amount_total', 0) / 100  # Convert from cents to dollars
+        payment_intent_id = session.get('payment_intent')
+        
+        # Try to get user_id from metadata first (if available)
+        user_id = session.get('metadata', {}).get('user_id')
+        
+        if user_id:
+            logger.info(f"💰 Processing payment: ${amount_total} for user_id: {user_id}")
+            success = credit_wallet_by_user_id(user_id, amount_total, payment_intent_id)
+            if success:
+                return jsonify({'status': 'success'})
+            else:
+                return jsonify({'error': 'Failed to credit wallet by user_id'}), 500
+        
+        # Fallback to email-based lookup
+        if not customer_email:
+            logger.warning(f"⚠️ No customer email found in session: {session['id']}")
+            return jsonify({'error': 'No customer email'}), 400
+        
+        logger.info(f"💰 Processing payment: ${amount_total} for {customer_email}")
+        success = credit_wallet_by_email(customer_email, amount_total, payment_intent_id)
+        if success:
+            return jsonify({'status': 'success'})
+        else:
+            return jsonify({'error': 'Failed to credit wallet by email'}), 500
+    
+    elif event['type'] == 'checkout.session.expired':
+        session = event['data']['object']
+        logger.info(f"⚠️ Payment session expired: {session['id']}")
+    
+    elif event['type'] == 'payment_intent.payment_failed':
+        payment_intent = event['data']['object']
+        logger.warning(f"⚠️ Payment failed: {payment_intent['id']}")
+        
+        # Record failed transaction if we can identify the user
+        customer_email = payment_intent.get('receipt_email')
+        if customer_email and SUPABASE_AVAILABLE:
+            try:
+                user_response = supabase_client.auth.admin.list_users()
+                user = None
+                for u in user_response.users:
+                    if u.email == customer_email:
+                        user = u
+                        break
+                
+                if user:
+                    amount_total = payment_intent.get('amount', 0) / 100
+                    supabase_client.table('wallet_transactions').insert({
+                        'user_id': user.id,
+                        'type': 'funding',
+                        'amount': amount_total,
+                        'payment_intent_id': payment_intent['id'],
+                        'status': 'failed',
+                        'description': f'Payment failed - ${amount_total}',
+                        'created_at': datetime.now(timezone.utc).isoformat()
+                    }).execute()
+            except Exception as e:
+                logger.error(f"❌ Error recording failed transaction: {str(e)}")
+    
+    return jsonify({'status': 'success'})
 
 if __name__ == '__main__':
     # For production deployment on EC2

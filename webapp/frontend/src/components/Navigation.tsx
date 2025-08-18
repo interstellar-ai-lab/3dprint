@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { AuthModal } from './AuthModal';
+import { Wallet } from './Wallet';
 
 export const Navigation: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'signin' | 'signup'>('signin');
+  const [walletOpen, setWalletOpen] = useState(false);
   const { user, signOut, loading } = useAuth();
 
   useEffect(() => {
@@ -95,6 +97,21 @@ export const Navigation: React.FC = () => {
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
               ) : user ? (
                 <div className="flex items-center space-x-3">
+                  {/* Wallet Button */}
+                  <button
+                    onClick={() => setWalletOpen(true)}
+                    className={`px-3 py-1 rounded text-sm font-medium transition-all ${
+                      isScrolled 
+                        ? 'bg-purple-600 text-white hover:bg-purple-700' 
+                        : 'bg-white/20 text-white hover:bg-white/30'
+                    }`}
+                  >
+                    <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                    </svg>
+                    Wallet
+                  </button>
+                  
                   <span className={`text-sm ${
                     isScrolled ? 'text-gray-700' : 'text-white/90'
                   }`}>
@@ -262,6 +279,12 @@ export const Navigation: React.FC = () => {
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
         initialMode={authModalMode}
+      />
+      
+      {/* Wallet Modal */}
+      <Wallet
+        isOpen={walletOpen}
+        onClose={() => setWalletOpen(false)}
       />
     </nav>
   );
