@@ -136,7 +136,7 @@ ensure_database_schema()
 
 # Stripe configuration for webhooks
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
-STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "whsec_3bceebeb9601dcd93ea64c8ab247a3b466f1e8d7ceaa5fd74809213d1debf9cc")
 
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
@@ -2322,7 +2322,7 @@ def credit_wallet_by_email(email: str, amount: float, payment_intent_id: str = N
         # Find user by email
         user_response = supabase_client.auth.admin.list_users()
         user = None
-        for u in user_response.users:
+        for u in user_response:  # user_response is already a list
             if u.email == email:
                 user = u
                 break
@@ -2370,18 +2370,7 @@ def stripe_webhook():
         amount_total = session.get('amount_total', 0) / 100  # Convert from cents to dollars
         payment_intent_id = session.get('payment_intent')
         
-        # Try to get user_id from metadata first (if available)
-        user_id = session.get('metadata', {}).get('user_id')
-        
-        if user_id:
-            logger.info(f"💰 Processing payment: ${amount_total} for user_id: {user_id}")
-            success = credit_wallet_by_user_id(user_id, amount_total, payment_intent_id)
-            if success:
-                return jsonify({'status': 'success'})
-            else:
-                return jsonify({'error': 'Failed to credit wallet by user_id'}), 500
-        
-        # Fallback to email-based lookup
+        # Email-based wallet crediting
         if not customer_email:
             logger.warning(f"⚠️ No customer email found in session: {session['id']}")
             return jsonify({'error': 'No customer email'}), 400
@@ -2407,7 +2396,7 @@ def stripe_webhook():
             try:
                 user_response = supabase_client.auth.admin.list_users()
                 user = None
-                for u in user_response.users:
+                for u in user_response:  # user_response is already a list
                     if u.email == customer_email:
                         user = u
                         break
