@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { GoogleSignInButton } from './GoogleSignInButton';
 
@@ -24,7 +24,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
-  const { signInWithEmail, signUpWithEmail, resetPassword } = useAuth();
+  const { signInWithEmail, signUpWithEmail, resetPassword, user } = useAuth();
+
+  // Auto-close modal when user successfully signs in (including Google OAuth)
+  useEffect(() => {
+    if (isOpen && user) {
+      // Show success message for Google sign-in
+      if (!success) {
+        setSuccess('Successfully signed in!');
+      }
+      // Small delay to show success state briefly
+      const timer = setTimeout(() => {
+        onClose();
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, user, onClose, success]);
 
   // Password strength validation
   const getPasswordStrength = (password: string) => {
