@@ -314,7 +314,7 @@ def upload_image_to_supabase(image_data: bytes, filename: str, content_type: str
         return None
 
 def clean_glb_asset_properties(glb_data: bytes) -> bytes:
-    """Remove asset properties (generator and version) from GLB file data"""
+    """Comprehensive GLB cleanup - removes tripo tags, hex IDs, and cleans asset properties"""
     try:
         from pygltflib import GLTF2
         import io
@@ -322,12 +322,78 @@ def clean_glb_asset_properties(glb_data: bytes) -> bytes:
         # Load GLB data from bytes
         gltf = GLTF2().load_from_bytes(glb_data)
         
-        # Remove asset properties
+        logger.info(f"🔧 Starting comprehensive GLB cleanup (nodes: {len(gltf.nodes) if gltf.nodes else 0})")
+        
+        # Clean node names
+        if gltf.nodes:
+            for node in gltf.nodes:
+                if hasattr(node, 'name') and node.name:
+                    original_name = node.name
+                    cleaned_name = _clean_node_name(node.name)
+                    if cleaned_name != original_name:
+                        logger.info(f"🧹 Cleaned node: '{original_name}' -> '{cleaned_name}'")
+                        node.name = cleaned_name
+        
+        # Clean mesh names
+        if gltf.meshes:
+            for i, mesh in enumerate(gltf.meshes):
+                if hasattr(mesh, 'name') and mesh.name:
+                    original_name = mesh.name
+                    cleaned_name = _clean_mesh_name(mesh.name, i)
+                    if cleaned_name != original_name:
+                        logger.info(f"🧹 Cleaned mesh: '{original_name}' -> '{cleaned_name}'")
+                        mesh.name = cleaned_name
+        
+        # Clean material names
+        if gltf.materials:
+            for i, material in enumerate(gltf.materials):
+                if hasattr(material, 'name') and material.name:
+                    original_name = material.name
+                    cleaned_name = _clean_material_name(material.name, i)
+                    if cleaned_name != original_name:
+                        logger.info(f"🧹 Cleaned material: '{original_name}' -> '{cleaned_name}'")
+                        material.name = cleaned_name
+        
+        # Clean texture and image names
+        if gltf.textures:
+            for i, texture in enumerate(gltf.textures):
+                if hasattr(texture, 'name') and texture.name:
+                    original_name = texture.name
+                    cleaned_name = _clean_generic_name(texture.name, f'texture_{i}')
+                    if cleaned_name != original_name:
+                        logger.info(f"🧹 Cleaned texture: '{original_name}' -> '{cleaned_name}'")
+                        texture.name = cleaned_name
+        
+        if gltf.images:
+            for i, image in enumerate(gltf.images):
+                if hasattr(image, 'name') and image.name:
+                    original_name = image.name
+                    cleaned_name = _clean_generic_name(image.name, f'image_{i}')
+                    if cleaned_name != original_name:
+                        logger.info(f"🧹 Cleaned image: '{original_name}' -> '{cleaned_name}'")
+                        image.name = cleaned_name
+        
+        # Clean scene names
+        if gltf.scenes:
+            for scene in gltf.scenes:
+                if hasattr(scene, 'name') and scene.name:
+                    original_name = scene.name
+                    cleaned_name = _clean_generic_name(scene.name, 'scene')
+                    if cleaned_name != original_name:
+                        logger.info(f"🧹 Cleaned scene: '{original_name}' -> '{cleaned_name}'")
+                        scene.name = cleaned_name
+        
+        # Clean asset metadata
         if hasattr(gltf, 'asset') and gltf.asset:
-            if hasattr(gltf.asset, 'generator'):
-                gltf.asset.generator = None
-            if hasattr(gltf.asset, 'version'):
-                gltf.asset.version = None
+            if hasattr(gltf.asset, 'generator') and gltf.asset.generator:
+                if 'tripo' in gltf.asset.generator.lower():
+                    logger.info(f"🧹 Cleaned generator: '{gltf.asset.generator}' -> 'GLB Cleaner'")
+                    gltf.asset.generator = 'GLB Cleaner'
+            
+            if hasattr(gltf.asset, 'copyright') and gltf.asset.copyright:
+                if 'tripo' in gltf.asset.copyright.lower():
+                    logger.info(f"🧹 Cleaned copyright: '{gltf.asset.copyright}' -> ''")
+                    gltf.asset.copyright = ''
         
         # Save back to bytes
         cleaned_data = gltf.save_to_bytes()
@@ -335,15 +401,25 @@ def clean_glb_asset_properties(glb_data: bytes) -> bytes:
         # Ensure we have bytes data
         if not isinstance(cleaned_data, bytes):
             logger.warning(f"⚠️ save_to_bytes() returned {type(cleaned_data)}, converting to bytes")
-            if isinstance(cleaned_data, list):
-                cleaned_data = bytes(cleaned_data)
-            elif isinstance(cleaned_data, str):
-                cleaned_data = cleaned_data.encode('utf-8')
-            else:
-                logger.error(f"❌ Unexpected data type from save_to_bytes(): {type(cleaned_data)}")
+            try:
+                if isinstance(cleaned_data, list):
+                    # Handle list of bytes objects or integers
+                    if cleaned_data and isinstance(cleaned_data[0], bytes):
+                        # List of bytes objects - concatenate them
+                        cleaned_data = b''.join(cleaned_data)
+                    else:
+                        # List of integers - convert to bytes
+                        cleaned_data = bytes(cleaned_data)
+                elif isinstance(cleaned_data, str):
+                    cleaned_data = cleaned_data.encode('utf-8')
+                else:
+                    logger.error(f"❌ Unexpected data type from save_to_bytes(): {type(cleaned_data)}")
+                    return glb_data  # Return original data
+            except Exception as conversion_error:
+                logger.error(f"❌ Error converting to bytes: {conversion_error}")
                 return glb_data  # Return original data
         
-        logger.info("✅ Removed asset properties from GLB file")
+        logger.info("✅ Completed comprehensive GLB cleanup")
         return cleaned_data
         
     except ImportError:
@@ -351,9 +427,157 @@ def clean_glb_asset_properties(glb_data: bytes) -> bytes:
         logger.info("📝 Returning original GLB data without cleaning")
         return glb_data
     except Exception as e:
-        logger.error(f"❌ Error cleaning GLB asset properties: {e}")
+        logger.error(f"❌ Error cleaning GLB: {e}")
         logger.info("📝 Returning original GLB data due to error")
         return glb_data
+
+def _clean_node_name(name: str) -> str:
+    """Clean node names by removing tripo tags and hex identifiers"""
+    if not name:
+        return 'object'
+    
+    # Remove tripo prefixes
+    cleaned_name = name
+    if cleaned_name.startswith('tripo_'):
+        cleaned_name = cleaned_name[6:]
+    
+    # Remove hex/UUID suffixes
+    if '_' in cleaned_name:
+        parts = cleaned_name.split('_')
+        cleaned_parts = []
+        for part in parts:
+            # Check for hex patterns (8+ characters, all hex)
+            if len(part) >= 8 and all(c in '0123456789abcdef' for c in part.lower()):
+                continue
+            # Also check for UUID patterns (8-4-4-4-12 format)
+            if len(part) >= 8 and '-' in part and all(c in '0123456789abcdef-' for c in part.lower()):
+                continue
+            cleaned_parts.append(part)
+        cleaned_name = '_'.join(cleaned_parts)
+    
+    # Remove common unwanted suffixes
+    unwanted_suffixes = ['_node', '_mesh', '_object', '_model']
+    for suffix in unwanted_suffixes:
+        if cleaned_name.endswith(suffix):
+            cleaned_name = cleaned_name[:-len(suffix)]
+    
+    # Clean up multiple underscores
+    while '__' in cleaned_name:
+        cleaned_name = cleaned_name.replace('__', '_')
+    
+    # Remove leading/trailing underscores
+    cleaned_name = cleaned_name.strip('_')
+    
+    # If name is empty after cleaning, use a default
+    if not cleaned_name:
+        cleaned_name = 'object'
+    
+    return cleaned_name
+
+def _clean_mesh_name(name: str, index: int) -> str:
+    """Clean mesh names by removing tripo tags and hex identifiers"""
+    if not name:
+        return f'mesh_{index}'
+    
+    # Remove tripo prefixes
+    cleaned_name = name
+    if cleaned_name.startswith('tripo_'):
+        cleaned_name = cleaned_name[6:]
+    
+    # Remove hex/UUID suffixes
+    if '_' in cleaned_name:
+        parts = cleaned_name.split('_')
+        cleaned_parts = []
+        for part in parts:
+            # Check for hex patterns (8+ characters, all hex)
+            if len(part) >= 8 and all(c in '0123456789abcdef' for c in part.lower()):
+                continue
+            # Also check for UUID patterns (8-4-4-4-12 format)
+            if len(part) >= 8 and '-' in part and all(c in '0123456789abcdef-' for c in part.lower()):
+                continue
+            cleaned_parts.append(part)
+        cleaned_name = '_'.join(cleaned_parts)
+    
+    # Remove unwanted suffixes
+    unwanted_suffixes = ['_mesh', '_geometry', '_object']
+    for suffix in unwanted_suffixes:
+        if cleaned_name.endswith(suffix):
+            cleaned_name = cleaned_name[:-len(suffix)]
+    
+    # Clean up and set default if empty
+    cleaned_name = cleaned_name.strip('_')
+    if not cleaned_name:
+        cleaned_name = f'mesh_{index}'
+    
+    return cleaned_name
+
+def _clean_material_name(name: str, index: int) -> str:
+    """Clean material names by removing tripo tags and hex identifiers"""
+    if not name:
+        return f'material_{index}'
+    
+    # Remove tripo prefixes
+    cleaned_name = name
+    if cleaned_name.startswith('tripo_'):
+        cleaned_name = cleaned_name[6:]
+    
+    # Remove hex/UUID suffixes
+    if '_' in cleaned_name:
+        parts = cleaned_name.split('_')
+        cleaned_parts = []
+        for part in parts:
+            # Check for hex patterns (8+ characters, all hex)
+            if len(part) >= 8 and all(c in '0123456789abcdef' for c in part.lower()):
+                continue
+            # Also check for UUID patterns (8-4-4-4-12 format)
+            if len(part) >= 8 and '-' in part and all(c in '0123456789abcdef-' for c in part.lower()):
+                continue
+            cleaned_parts.append(part)
+        cleaned_name = '_'.join(cleaned_parts)
+    
+    # Remove unwanted suffixes
+    unwanted_suffixes = ['_material', '_mat', '_shader']
+    for suffix in unwanted_suffixes:
+        if cleaned_name.endswith(suffix):
+            cleaned_name = cleaned_name[:-len(suffix)]
+    
+    # Clean up and set default if empty
+    cleaned_name = cleaned_name.strip('_')
+    if not cleaned_name:
+        cleaned_name = f'material_{index}'
+    
+    return cleaned_name
+
+def _clean_generic_name(name: str, default: str) -> str:
+    """Generic name cleaning function for textures, images, and scenes"""
+    if not name:
+        return default
+    
+    # Remove tripo prefixes
+    cleaned_name = name
+    if cleaned_name.startswith('tripo_'):
+        cleaned_name = cleaned_name[6:]
+    
+    # Remove hex/UUID suffixes
+    if '_' in cleaned_name:
+        parts = cleaned_name.split('_')
+        cleaned_parts = []
+        for part in parts:
+            # Check for hex patterns (8+ characters, all hex)
+            if len(part) >= 8 and all(c in '0123456789abcdef' for c in part.lower()):
+                continue
+            # Also check for UUID patterns (8-4-4-4-12 format)
+            if len(part) >= 8 and '-' in part and all(c in '0123456789abcdef-' for c in part.lower()):
+                continue
+            cleaned_parts.append(part)
+        cleaned_name = '_'.join(cleaned_parts)
+    
+    # Clean up
+    cleaned_name = cleaned_name.strip('_')
+    while '__' in cleaned_name:
+        cleaned_name = cleaned_name.replace('__', '_')
+    
+    return cleaned_name if cleaned_name else default
 
 def insert_image_record(target_object: str, image_url: str, iteration: int = None, model_3d_url: str = None) -> Optional[int]:
     """Insert image record into generated_images table"""
