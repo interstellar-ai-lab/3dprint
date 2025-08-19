@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { AuthProvider } from './contexts/AuthContext';
 import { GoogleOneTap } from './components/GoogleOneTap';
 import { Navigation } from './components/Navigation';
+import { Wallet } from './components/Wallet';
 import { Hero } from './components/Hero';
 // import { Features } from './components/Features';
 import { MarketSection } from './components/MarketSection';
@@ -19,10 +20,12 @@ const queryClient = new QueryClient();
 
 // Main landing page component
 const HomePage: React.FC = () => {
+  const [walletOpen, setWalletOpen] = useState(false);
+
   return (
     <div className="min-h-screen">
       {/* Navigation */}
-      <Navigation />
+      <Navigation onWalletOpen={() => setWalletOpen(true)} />
       
       {/* Hero Section */}
       <Hero />
@@ -49,6 +52,12 @@ const HomePage: React.FC = () => {
       
       {/* Footer */}
       <Footer />
+      
+      {/* Wallet Modal */}
+      <Wallet
+        isOpen={walletOpen}
+        onClose={() => setWalletOpen(false)}
+      />
     </div>
   );
 };

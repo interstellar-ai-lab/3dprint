@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { AuthModal } from './AuthModal';
-import { Wallet } from './Wallet';
 
-export const Navigation: React.FC = () => {
+interface NavigationProps {
+  onWalletOpen: () => void;
+}
+
+export const Navigation: React.FC<NavigationProps> = ({ onWalletOpen }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'signin' | 'signup'>('signin');
-  const [walletOpen, setWalletOpen] = useState(false);
   const { user, signOut, loading } = useAuth();
 
   useEffect(() => {
@@ -99,7 +101,7 @@ export const Navigation: React.FC = () => {
                 <div className="flex items-center space-x-3">
                   {/* Wallet Button */}
                   <button
-                    onClick={() => setWalletOpen(true)}
+                    onClick={onWalletOpen}
                     className={`px-3 py-1 rounded text-sm font-medium transition-all ${
                       isScrolled 
                         ? 'bg-purple-600 text-white hover:bg-purple-700' 
@@ -279,12 +281,6 @@ export const Navigation: React.FC = () => {
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
         initialMode={authModalMode}
-      />
-      
-      {/* Wallet Modal */}
-      <Wallet
-        isOpen={walletOpen}
-        onClose={() => setWalletOpen(false)}
       />
     </nav>
   );
