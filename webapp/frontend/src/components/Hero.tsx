@@ -58,7 +58,7 @@ export const Hero: React.FC = () => {
           
           <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
             <span className="block">Vicino AI</span>
-            <span className="text-3xl md:text-4xl font-light opacity-90">Multi-Agent 3D Generation</span>
+            <span className="block text-3xl md:text-4xl font-light opacity-90 mt-2">Multi-Agent 3D Generation</span>
           </h1>
           
           <p className="text-xl md:text-2xl opacity-90 max-w-4xl mx-auto mb-8 leading-relaxed">
