@@ -94,7 +94,7 @@ export const FeedbackPrompt: React.FC<FeedbackPromptProps> = ({
         </div>
 
         {/* Pricing Information */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+        {/* <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
           <div className="flex items-center justify-between">
             <span className="text-sm text-blue-700">Feedback submission cost:</span>
             <span className="text-sm font-semibold text-blue-800">$0.10</span>
@@ -102,7 +102,7 @@ export const FeedbackPrompt: React.FC<FeedbackPromptProps> = ({
           <p className="text-xs text-blue-600 mt-1">
             This helps improve the next generation iteration.
           </p>
-        </div>
+        </div> */}
 
         <div className="flex space-x-3">
           <button

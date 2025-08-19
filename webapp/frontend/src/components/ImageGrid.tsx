@@ -261,12 +261,12 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ imageUrl, originalUrl, ses
         {sessionId && iteration && targetObject && (
           <div className="mt-3">
             {/* Pricing Info */}
-            <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+            {/* <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-blue-700">3D Generation Cost:</span>
                 <span className="text-xs font-semibold text-blue-800">$0.50</span>
               </div>
-            </div>
+            </div> */}
             
             <button
               onClick={handleGenerate3D}
