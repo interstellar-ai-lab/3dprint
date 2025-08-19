@@ -98,19 +98,115 @@ try:
         supabase_client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
         SUPABASE_AVAILABLE = True
         logger.info("✅ Supabase client initialized successfully with service key")
-    elif SUPABASE_URL and SUPABASE_ANON_KEY:
-        # Fallback to anon key if service key not available
-        supabase_client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-        SUPABASE_AVAILABLE = True
-        logger.info("✅ Supabase client initialized with anon key (RLS restrictions may apply)")
     else:
         supabase_client = None
         SUPABASE_AVAILABLE = False
-        logger.warning("⚠️ Supabase URL or keys not found in environment variables")
+        logger.warning("⚠️ Supabase credentials not found, wallet features disabled")
 except ImportError:
     supabase_client = None
     SUPABASE_AVAILABLE = False
-    logger.warning("⚠️ Supabase library not installed. Install with: pip install supabase")
+    logger.warning("⚠️ Supabase not available, wallet features disabled")
+
+# Credit management functions
+def get_user_from_token():
+    """Extract and verify user from Authorization header"""
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return None, "Authorization header required"
+    
+    token = auth_header.split(' ')[1]
+    
+    if not SUPABASE_AVAILABLE:
+        return None, "Database not available"
+    
+    try:
+        user_response = supabase_client.auth.get_user(token)
+        user = user_response.user
+        
+        if not user:
+            return None, "Invalid token"
+        
+        return user, None
+        
+    except Exception as e:
+        logger.error(f"❌ Token verification failed: {str(e)}")
+        return None, "Invalid token"
+
+def check_user_balance(user_id, required_credits):
+    """Check if user has enough credits for an operation"""
+    try:
+        result = supabase_client.table('user_wallets').select('balance').eq('user_id', user_id).execute()
+        
+        if result.data:
+            balance = float(result.data[0]['balance'])
+        else:
+            # Create wallet if it doesn't exist
+            balance = 0.0
+            supabase_client.table('user_wallets').insert({
+                'user_id': user_id,
+                'balance': balance,
+                'created_at': datetime.now(timezone.utc).isoformat(),
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }).execute()
+        
+        return balance >= required_credits, balance
+        
+    except Exception as e:
+        logger.error(f"❌ Error checking user balance: {str(e)}")
+        return False, 0.0
+
+def deduct_credits(user_id, amount, description):
+    """Deduct credits from user's wallet and record transaction"""
+    try:
+        # Get current balance
+        result = supabase_client.table('user_wallets').select('balance').eq('user_id', user_id).execute()
+        
+        if result.data:
+            current_balance = float(result.data[0]['balance'])
+            new_balance = current_balance - amount
+            
+            # Update wallet balance
+            supabase_client.table('user_wallets').update({
+                'balance': new_balance,
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }).eq('user_id', user_id).execute()
+        else:
+            # Create wallet if it doesn't exist
+            new_balance = -amount
+            supabase_client.table('user_wallets').insert({
+                'user_id': user_id,
+                'balance': new_balance,
+                'created_at': datetime.now(timezone.utc).isoformat(),
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }).execute()
+        
+        # Record transaction
+        supabase_client.table('wallet_transactions').insert({
+            'user_id': user_id,
+            'type': 'usage',
+            'amount': amount,
+            'status': 'completed',
+            'description': description,
+            'created_at': datetime.now(timezone.utc).isoformat()
+        }).execute()
+        
+        logger.info(f"✅ Deducted {amount} credits from user {user_id} for: {description}")
+        return True, new_balance
+        
+    except Exception as e:
+        logger.error(f"❌ Error deducting credits: {str(e)}")
+        return False, 0.0
+
+# Initialize Supabase client if available (fallback)
+if not SUPABASE_AVAILABLE and SUPABASE_URL and SUPABASE_ANON_KEY:
+    try:
+        supabase_client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+        SUPABASE_AVAILABLE = True
+        logger.info("✅ Supabase client initialized with anon key (RLS restrictions may apply)")
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to initialize Supabase with anon key: {e}")
+        supabase_client = None
+        SUPABASE_AVAILABLE = False
 
 def ensure_database_schema():
     """Ensure the database table has the required columns for status tracking"""
@@ -934,8 +1030,23 @@ def home():
 
 @app.route('/api/generate', methods=['POST'])
 def generate():
-    """Start iterative generation process"""
+    """Start iterative generation process - costs 0.1 credits"""
     try:
+        # Check user authentication and balance
+        user, error = get_user_from_token()
+        if error:
+            return jsonify({"error": error}), 401
+        
+        # Check if user has enough credits (0.1 USD)
+        has_balance, current_balance = check_user_balance(user.id, 0.1)
+        if not has_balance:
+            return jsonify({
+                "error": "Insufficient credits",
+                "required": 0.1,
+                "current_balance": current_balance,
+                "message": "You need 0.1 credits to start generation. Please add funds to your wallet."
+            }), 402
+        
         data = request.get_json()
         target_object = data.get('target_object', '').strip()
         mode = data.get('mode', 'quick') # Default to 'quick' if not provided
@@ -966,12 +1077,19 @@ def generate():
         thread.daemon = True  # Make thread daemon so it doesn't block app shutdown
         thread.start()
         
+        # Deduct credits after successful generation start
+        success, new_balance = deduct_credits(user.id, 0.1, f"Iterative generation: {target_object} ({mode} mode)")
+        if not success:
+            logger.error(f"Failed to deduct credits for user {user.id}")
+        
         logger.info(f"Started generation session {session_id} for '{target_object}' in {mode} mode")
         
         return jsonify({
             "session_id": session_id,
             "status": "started",
-            "message": f"Started iterative generation for: {target_object} in {mode} mode"
+            "message": f"Started iterative generation for: {target_object} in {mode} mode",
+            "credits_deducted": 0.1,
+            "remaining_balance": new_balance
         })
         
     except Exception as e:
@@ -1037,8 +1155,23 @@ def stop_generation(session_id):
 
 @app.route('/api/feedback/<session_id>', methods=['POST'])
 def submit_feedback(session_id):
-    """Submit user feedback for the next iteration"""
+    """Submit user feedback for the next iteration - costs 0.1 credits"""
     try:
+        # Check user authentication and balance
+        user, error = get_user_from_token()
+        if error:
+            return jsonify({"error": error}), 401
+        
+        # Check if user has enough credits (0.1 USD)
+        has_balance, current_balance = check_user_balance(user.id, 0.1)
+        if not has_balance:
+            return jsonify({
+                "error": "Insufficient credits",
+                "required": 0.1,
+                "current_balance": current_balance,
+                "message": "You need 0.1 credits to submit feedback. Please add funds to your wallet."
+            }), 402
+        
         if session_id not in active_sessions:
             return jsonify({"error": "Session not found"}), 404
         
@@ -1054,12 +1187,19 @@ def submit_feedback(session_id):
         session["user_feedback"] = user_feedback
         session["status"] = "running"  # Resume generation
         
+        # Deduct credits after successful feedback submission
+        success, new_balance = deduct_credits(user.id, 0.1, f"Feedback submission: {session.get('target_object', 'Unknown object')} (session {session_id})")
+        if not success:
+            logger.error(f"Failed to deduct credits for user {user.id}")
+        
         logger.info(f"Received user feedback for session {session_id}: {user_feedback}")
         
         return jsonify({
             "session_id": session_id,
             "status": "running",
-            "message": "Feedback received, resuming generation"
+            "message": "Feedback received, resuming generation",
+            "credits_deducted": 0.1,
+            "remaining_balance": new_balance
         })
         
     except Exception as e:
@@ -1070,6 +1210,7 @@ def submit_feedback(session_id):
 def get_iteration_image(session_id, iteration):
     """Get image for a specific iteration"""
     try:
+        
         if session_id not in active_sessions:
             return jsonify({"error": "Session not found"}), 404
         
@@ -1079,6 +1220,7 @@ def get_iteration_image(session_id, iteration):
         
         iteration_data = session["iterations"][iteration - 1]
         image_url = iteration_data["image_url"]
+        target_object = session.get("target_object", "Unknown object")
         
         # Handle file URLs
         if image_url.startswith('file://'):
@@ -1144,8 +1286,23 @@ def list_sessions():
 
 @app.route('/api/generate-3d', methods=['POST'])
 def generate_3d():
-    """Submit 3D generation job and return immediately"""
+    """Submit 3D generation job and return immediately - costs 0.5 credits"""
     try:
+        # Check user authentication and balance
+        user, error = get_user_from_token()
+        if error:
+            return jsonify({"error": error}), 401
+        
+        # Check if user has enough credits (0.5 USD)
+        has_balance, current_balance = check_user_balance(user.id, 0.5)
+        if not has_balance:
+            return jsonify({
+                "error": "Insufficient credits",
+                "required": 0.5,
+                "current_balance": current_balance,
+                "message": "You need 0.5 credits to generate 3D model. Please add funds to your wallet."
+            }), 402
+        
         data = request.get_json()
         session_id = data.get('sessionId')
         iteration = data.get('iteration')
@@ -1206,12 +1363,19 @@ def generate_3d():
         thread.daemon = True
         thread.start()
         
+        # Deduct credits after successful job submission
+        success, new_balance = deduct_credits(user.id, 0.5, f"3D generation: {target_object} (iteration {iteration})")
+        if not success:
+            logger.error(f"Failed to deduct credits for user {user.id}")
+        
         return jsonify({
             "success": True,
             "record_id": record_id,
             "status": "running",
             "status_url": f"/api/generation-status/{record_id}",
-            "message": "3D generation job submitted successfully"
+            "message": "3D generation job submitted successfully",
+            "credits_deducted": 0.5,
+            "remaining_balance": new_balance
         })
         
     except Exception as e:
@@ -1220,8 +1384,23 @@ def generate_3d():
 
 @app.route('/api/upload-multiview', methods=['POST'])
 def upload_multiview():
-    """Handle multi-view image upload and direct 3D generation"""
+    """Handle multi-view image upload and direct 3D generation - costs 0.5 credits"""
     try:
+        # Check user authentication and balance
+        user, error = get_user_from_token()
+        if error:
+            return jsonify({"error": error}), 401
+        
+        # Check if user has enough credits (0.5 USD)
+        has_balance, current_balance = check_user_balance(user.id, 0.5)
+        if not has_balance:
+            return jsonify({
+                "error": "Insufficient credits",
+                "required": 0.5,
+                "current_balance": current_balance,
+                "message": "You need 0.5 credits to generate 3D model from multi-view upload. Please add funds to your wallet."
+            }), 402
+        
         # Check if files are present
         if 'front' not in request.files or 'left' not in request.files or 'back' not in request.files or 'right' not in request.files:
             return jsonify({"error": "All four views (front, left, back, right) are required"}), 400
@@ -1291,13 +1470,20 @@ def upload_multiview():
         thread.daemon = True
         thread.start()
         
+        # Deduct credits after successful job submission
+        success, new_balance = deduct_credits(user.id, 0.5, f"Multi-view 3D generation: {target_object}")
+        if not success:
+            logger.error(f"Failed to deduct credits for user {user.id}")
+        
         return jsonify({
             "success": True,
             "session_id": session_id,
             "record_id": record_id,
             "status": "running",
             "status_url": f"/api/generation-status/{record_id}",
-            "message": "Multi-view upload and 3D generation started successfully"
+            "message": "Multi-view upload and 3D generation started successfully",
+            "credits_deducted": 0.5,
+            "remaining_balance": new_balance
         })
         
     except Exception as e:

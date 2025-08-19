@@ -16,6 +16,7 @@ export const FeedbackPrompt: React.FC<FeedbackPromptProps> = ({
   onFeedbackSubmitted 
 }) => {
   const [feedback, setFeedback] = useState('');
+  const [creditError, setCreditError] = useState<string | null>(null);
   const { updateSession } = useGenerationStore();
 
   const feedbackMutation = useMutation(
@@ -25,15 +26,26 @@ export const FeedbackPrompt: React.FC<FeedbackPromptProps> = ({
       onSuccess: (data) => {
         updateSession({ status: 'running', user_feedback: feedback });
         onFeedbackSubmitted(feedback);
+        setCreditError(null);
       },
       onError: (error: any) => {
         console.error('Failed to submit feedback:', error);
+        
+        // Handle credit-related errors
+        if (error.response?.status === 402) {
+          setCreditError(error.response.data.message || 'Insufficient credits. Please add funds to your wallet.');
+        } else if (error.response?.status === 401) {
+          setCreditError('Authentication required. Please sign in again.');
+        } else {
+          setCreditError(error.response?.data?.error || error.message || 'Failed to submit feedback');
+        }
       },
     }
   );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setCreditError(null);
     if (feedback.trim()) {
       feedbackMutation.mutate({ sessionId, feedback: feedback.trim() });
     } else {
@@ -43,6 +55,7 @@ export const FeedbackPrompt: React.FC<FeedbackPromptProps> = ({
   };
 
   const handleSkip = () => {
+    setCreditError(null);
     feedbackMutation.mutate({ sessionId, feedback: '' });
   };
 
@@ -80,6 +93,17 @@ export const FeedbackPrompt: React.FC<FeedbackPromptProps> = ({
           </p>
         </div>
 
+        {/* Pricing Information */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-blue-700">Feedback submission cost:</span>
+            <span className="text-sm font-semibold text-blue-800">$0.10</span>
+          </div>
+          <p className="text-xs text-blue-600 mt-1">
+            This helps improve the next generation iteration.
+          </p>
+        </div>
+
         <div className="flex space-x-3">
           <button
             type="submit"
@@ -103,7 +127,32 @@ export const FeedbackPrompt: React.FC<FeedbackPromptProps> = ({
         </div>
       </form>
 
-      {feedbackMutation.isError && (
+      {/* Credit Error Display */}
+      {creditError && (
+        <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <svg className="w-5 h-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-red-700 text-sm">{creditError}</p>
+              {creditError.includes('credits') && (
+                <button
+                  onClick={() => window.location.href = '/#wallet'}
+                  className="mt-1 text-sm text-red-600 hover:text-red-800 underline"
+                >
+                  Add funds to wallet
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* General Error Display */}
+      {feedbackMutation.isError && !creditError && (
         <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-red-700 text-sm">
             Error: {feedbackMutation.error?.message || 'Failed to submit feedback'}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MagnifyingGlassIcon, CubeIcon } from '@heroicons/react/24/outline';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://vicino.ai';
 
@@ -22,7 +23,9 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ imageUrl, originalUrl, ses
   const [generationStatus, setGenerationStatus] = useState<'idle' | 'running' | 'completed' | 'failed'>('idle');
   const [recordId, setRecordId] = useState<number | null>(null);
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  const [creditError, setCreditError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   // Cleanup polling interval on unmount
   useEffect(() => {
@@ -101,6 +104,12 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ imageUrl, originalUrl, ses
       return;
     }
 
+    // Check if user is authenticated
+    if (!user) {
+      setCreditError('Please sign in to generate 3D models');
+      return;
+    }
+
     // If 3D model already exists, open studio in new tab
     if (threeDModelUrl) {
       window.open('/studio', '_blank');
@@ -115,12 +124,25 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ imageUrl, originalUrl, ses
     // Start new 3D generation job
     setIsGenerating3D(true);
     setGenerationStatus('running');
+    setCreditError(null);
     
     try {
+      // Get auth token
+      const { data: { session } } = await import('../lib/supabase').then(m => m.supabase.auth.getSession());
+      const token = session?.access_token;
+      
+      if (!token) {
+        setCreditError('Authentication required. Please sign in again.');
+        setIsGenerating3D(false);
+        setGenerationStatus('failed');
+        return;
+      }
+
       const response = await fetch(`${API_BASE_URL}/api/generate-3d`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           sessionId,
@@ -150,7 +172,18 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ imageUrl, originalUrl, ses
           setGenerationStatus('failed');
         }
       } else {
-        console.error('Failed to submit 3D generation job');
+        const errorData = await response.json();
+        console.error('Failed to submit 3D generation job:', errorData);
+        
+        // Handle credit-related errors
+        if (response.status === 402) {
+          setCreditError(errorData.message || 'Insufficient credits. Please add funds to your wallet.');
+        } else if (response.status === 401) {
+          setCreditError('Authentication required. Please sign in again.');
+        } else {
+          setCreditError(errorData.error || 'Failed to submit 3D generation job');
+        }
+        
         setIsGenerating3D(false);
         setGenerationStatus('failed');
       }
@@ -227,6 +260,14 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ imageUrl, originalUrl, ses
         {/* Generate 3D Button */}
         {sessionId && iteration && targetObject && (
           <div className="mt-3">
+            {/* Pricing Info */}
+            <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-blue-700">3D Generation Cost:</span>
+                <span className="text-xs font-semibold text-blue-800">$0.50</span>
+              </div>
+            </div>
+            
             <button
               onClick={handleGenerate3D}
               disabled={isGenerating3D || generationStatus === 'running'}
@@ -250,6 +291,30 @@ export const ImageGrid: React.FC<ImageGridProps> = ({ imageUrl, originalUrl, ses
                 }
               </span>
             </button>
+            
+            {/* Credit Error Display */}
+            {creditError && (
+              <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <svg className="w-5 h-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-red-800">{creditError}</p>
+                    {creditError.includes('credits') && (
+                      <button
+                        onClick={() => window.location.href = '/#wallet'}
+                        className="mt-1 text-sm text-red-600 hover:text-red-800 underline"
+                      >
+                        Add funds to wallet
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

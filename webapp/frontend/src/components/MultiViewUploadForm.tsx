@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { useMutation } from 'react-query';
 import { CloudArrowUpIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { MultiViewStatusDisplay } from './MultiViewStatusDisplay';
+import { useAuth } from '../contexts/AuthContext';
 
 interface ViewImage {
   file: File;
@@ -28,21 +29,42 @@ export const MultiViewUploadForm: React.FC<MultiViewUploadFormProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<{ recordId: number } | null>(null);
   const [generationStatus, setGenerationStatus] = useState<string>('pending');
+  const [creditError, setCreditError] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const { user } = useAuth();
 
   // API base URL - adjust this according to your backend setup
   const API_BASE = process.env.REACT_APP_API_URL || 'https://vicino.ai';
 
   const uploadMutation = useMutation(
     async (formData: FormData) => {
+      // Get auth token
+      const { data: { session } } = await import('../lib/supabase').then(m => m.supabase.auth.getSession());
+      const token = session?.access_token;
+      
+      if (!token) {
+        throw new Error('Authentication required. Please sign in again.');
+      }
+
       const response = await fetch(`${API_BASE}/api/upload-multiview`, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
         body: formData,
       });
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Upload failed');
+        
+        // Handle credit-related errors
+        if (response.status === 402) {
+          throw new Error(errorData.message || 'Insufficient credits. Please add funds to your wallet.');
+        } else if (response.status === 401) {
+          throw new Error('Authentication required. Please sign in again.');
+        } else {
+          throw new Error(errorData.error || 'Upload failed');
+        }
       }
       
       return response.json();
@@ -50,11 +72,13 @@ export const MultiViewUploadForm: React.FC<MultiViewUploadFormProps> = ({
     {
       onSuccess: (data) => {
         setUploadResult({ recordId: data.record_id });
+        setCreditError(null);
         onSuccess?.(data);
         // Show success message
         console.log('✅ Multi-view upload successful! Starting 3D generation...');
       },
       onError: (error: any) => {
+        setCreditError(error.message);
         onError?.(error);
       },
     }
@@ -232,11 +256,41 @@ export const MultiViewUploadForm: React.FC<MultiViewUploadFormProps> = ({
           </ul>
         </div>
 
+        {/* Pricing Information */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+              </svg>
+              <span className="text-sm font-medium text-blue-800">Pricing</span>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-blue-700">
+                <span className="font-semibold">$0.50</span> per 3D model
+              </p>
+            </div>
+          </div>
+          <p className="text-xs text-blue-600 mt-2">
+            Generate a 3D model from your uploaded multi-view images.
+          </p>
+        </div>
+
         {/* Submit Button */}
         {(() => {
           const isGenerating = isUploading || uploadMutation.isLoading || (uploadResult && generationStatus !== 'completed');
           const isCompleted = uploadResult && generationStatus === 'completed';
-          const isEnabled = isAllViewsUploaded && !isGenerating;
+          const isEnabled = isAllViewsUploaded && !isGenerating && user;
+          
+          if (!user) {
+            return (
+              <div className="w-full py-3 px-6 rounded-lg bg-yellow-50 border border-yellow-200 text-center">
+                <p className="text-yellow-800 text-sm">
+                  Please sign in to generate 3D models
+                </p>
+              </div>
+            );
+          }
           
           return (
             <button
@@ -278,9 +332,26 @@ export const MultiViewUploadForm: React.FC<MultiViewUploadFormProps> = ({
         {/* Error Display */}
         {uploadMutation.isError && (
           <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-700 text-sm">
-              Error: {uploadMutation.error instanceof Error ? uploadMutation.error.message : 'Upload failed'}
-            </p>
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="w-5 h-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-red-700 text-sm">
+                  {uploadMutation.error instanceof Error ? uploadMutation.error.message : 'Upload failed'}
+                </p>
+                {creditError && creditError.includes('credits') && (
+                  <button
+                    onClick={() => window.location.href = '/#wallet'}
+                    className="mt-1 text-sm text-red-600 hover:text-red-800 underline"
+                  >
+                    Add funds to wallet
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         )}
 

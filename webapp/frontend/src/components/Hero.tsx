@@ -105,6 +105,30 @@ export const Hero: React.FC = () => {
               <p className="text-sm opacity-80">Interactive refinement and customization</p>
             </div>
           </div>
+
+          {/* Pricing Section */}
+          <div className="mt-12 max-w-4xl mx-auto">
+            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8">
+              <h3 className="text-2xl font-bold mb-6 text-center">Simple, Transparent Pricing</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white/5 rounded-xl p-6 text-center">
+                  <div className="text-3xl mb-3">🖼️</div>
+                  <h4 className="font-semibold mb-2">Image Generation</h4>
+                  <div className="text-2xl font-bold mb-2">$0.10</div>
+                  <p className="text-sm opacity-80">Per image with feedback</p>
+                </div>
+                <div className="bg-white/5 rounded-xl p-6 text-center">
+                  <div className="text-3xl mb-3">🎲</div>
+                  <h4 className="font-semibold mb-2">3D Model Generation</h4>
+                  <div className="text-2xl font-bold mb-2">$0.50</div>
+                  <p className="text-sm opacity-80">Per 3D model creation</p>
+                </div>
+              </div>
+              <p className="text-center text-sm opacity-80 mt-4">
+                View generated images for free. Only pay for actual AI processing.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 

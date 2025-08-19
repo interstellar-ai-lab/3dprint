@@ -3,11 +3,25 @@ import { GenerationSession } from '../stores/generationStore';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://vicino.ai';
 
+// Create axios instance with auth interceptor
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+});
+
+// Add auth interceptor to include token in requests
+api.interceptors.request.use(async (config) => {
+  try {
+    const { data: { session } } = await import('../lib/supabase').then(m => m.supabase.auth.getSession());
+    if (session?.access_token) {
+      config.headers.Authorization = `Bearer ${session.access_token}`;
+    }
+  } catch (error) {
+    console.error('Failed to get auth token:', error);
+  }
+  return config;
 });
 
 export interface GenerationRequest {
