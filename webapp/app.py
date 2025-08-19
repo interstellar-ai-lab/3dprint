@@ -140,14 +140,8 @@ def check_user_balance(user_id, required_credits):
         if result.data:
             balance = float(result.data[0]['balance'])
         else:
-            # Create wallet if it doesn't exist
-            balance = 0.0
-            supabase_client.table('user_wallets').insert({
-                'user_id': user_id,
-                'balance': balance,
-                'created_at': datetime.now(timezone.utc).isoformat(),
-                'updated_at': datetime.now(timezone.utc).isoformat()
-            }).execute()
+            # Create wallet if it doesn't exist with welcome bonus
+            balance = create_new_user_wallet(user_id)
         
         return balance >= required_credits, balance
         
@@ -207,6 +201,35 @@ if not SUPABASE_AVAILABLE and SUPABASE_URL and SUPABASE_ANON_KEY:
         logger.warning(f"⚠️ Failed to initialize Supabase with anon key: {e}")
         supabase_client = None
         SUPABASE_AVAILABLE = False
+
+def create_new_user_wallet(user_id: str, initial_balance: float = 3.0) -> float:
+    """Create a new wallet for a user with welcome bonus"""
+    try:
+        # Create wallet with welcome bonus
+        supabase_client.table('user_wallets').insert({
+            'user_id': user_id,
+            'balance': initial_balance,
+            'created_at': datetime.now(timezone.utc).isoformat(),
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }).execute()
+        
+        # Record welcome bonus transaction
+        supabase_client.table('wallet_transactions').insert({
+            'user_id': user_id,
+            'type': 'funding',
+            'amount': 3.0,
+            'payment_intent_id': 'welcome_bonus',
+            'status': 'completed',
+            'description': 'Welcome bonus - $3 credit for new users',
+            'created_at': datetime.now(timezone.utc).isoformat()
+        }).execute()
+        
+        logger.info(f"✅ New user wallet created with $3 welcome bonus for user: {user_id}")
+        return initial_balance
+        
+    except Exception as e:
+        logger.error(f"❌ Error creating new user wallet: {str(e)}")
+        raise e
 
 def ensure_database_schema():
     """Ensure the database table has the required columns for status tracking"""
@@ -2219,14 +2242,8 @@ def get_wallet_balance():
         if result.data:
             balance = result.data[0]['balance']
         else:
-            # Create wallet if it doesn't exist
-            balance = 0.0
-            supabase_client.table('user_wallets').insert({
-                'user_id': user_id,  # This links to Supabase Users.uid
-                'balance': balance,
-                'created_at': datetime.now(timezone.utc).isoformat(),
-                'updated_at': datetime.now(timezone.utc).isoformat()
-            }).execute()
+            # Create wallet if it doesn't exist with $3 welcome bonus
+            balance = create_new_user_wallet(user_id)
         
         return jsonify({
             'balance': balance,
@@ -2306,14 +2323,8 @@ def credit_wallet():
                 'updated_at': datetime.now(timezone.utc).isoformat()
             }).eq('user_id', user_id).execute()
         else:
-            # Create wallet if it doesn't exist
-            new_balance = float(amount)
-            supabase_client.table('user_wallets').insert({
-                'user_id': user_id,  # Links to Supabase Users.uid
-                'balance': new_balance,
-                'created_at': datetime.now(timezone.utc).isoformat(),
-                'updated_at': datetime.now(timezone.utc).isoformat()
-            }).execute()
+            # Create wallet if it doesn't exist with welcome bonus + payment
+            new_balance = create_new_user_wallet(user_id) + float(amount)
         
         # Record transaction
         supabase_client.table('wallet_transactions').insert({
@@ -2386,14 +2397,8 @@ def credit_wallet_by_email():
                 'updated_at': datetime.now(timezone.utc).isoformat()
             }).eq('user_id', user_id).execute()
         else:
-            # Create wallet if it doesn't exist
-            new_balance = float(amount)
-            supabase_client.table('user_wallets').insert({
-                'user_id': user_id,
-                'balance': new_balance,
-                'created_at': datetime.now(timezone.utc).isoformat(),
-                'updated_at': datetime.now(timezone.utc).isoformat()
-            }).execute()
+            # Create wallet if it doesn't exist with welcome bonus + payment
+            new_balance = create_new_user_wallet(user_id) + float(amount)
         
         # Record transaction
         supabase_client.table('wallet_transactions').insert({
@@ -2473,14 +2478,8 @@ def credit_wallet_by_user_id(user_id: str, amount: float, payment_intent_id: str
                 'updated_at': datetime.now(timezone.utc).isoformat()
             }).eq('user_id', user_id).execute()
         else:
-            # Create wallet if it doesn't exist
-            new_balance = amount
-            supabase_client.table('user_wallets').insert({
-                'user_id': user_id,
-                'balance': new_balance,
-                'created_at': datetime.now(timezone.utc).isoformat(),
-                'updated_at': datetime.now(timezone.utc).isoformat()
-            }).execute()
+            # Create wallet if it doesn't exist with welcome bonus + payment
+            new_balance = create_new_user_wallet(user_id) + amount
         
         # Record transaction
         supabase_client.table('wallet_transactions').insert({
