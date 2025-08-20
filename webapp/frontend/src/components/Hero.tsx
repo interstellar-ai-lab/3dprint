@@ -1,11 +1,29 @@
 import React, { useState } from 'react';
+import { useAccessCode } from '../contexts/AccessCodeContext';
 
 export const Hero: React.FC = () => {
   const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://vicino.ai';
+  const { hasAccess, setAccessCode } = useAccessCode();
   const [isWaitlistModalOpen, setIsWaitlistModalOpen] = useState(false);
+  const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
+  const [accessCode, setAccessCodeInput] = useState('');
+  const [accessError, setAccessError] = useState('');
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+  const handleAccessCodeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAccessError('');
+    
+    const isValid = setAccessCode(accessCode);
+    if (isValid) {
+      setIsAccessModalOpen(false);
+      setAccessCodeInput('');
+    } else {
+      setAccessError('Invalid access code. Please try again.');
+    }
+  };
 
   const handleWaitlistSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,12 +86,21 @@ export const Hero: React.FC = () => {
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
-            {/* <button 
-              onClick={() => document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth' })}
-              className="bg-white text-purple-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
-            >
-              Try Demo Now
-            </button> */}
+            {hasAccess ? (
+              <button 
+                onClick={() => document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth' })}
+                className="bg-white text-purple-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+              >
+                Try Demo Now
+              </button>
+            ) : (
+              <button 
+                onClick={() => setIsAccessModalOpen(true)}
+                className="bg-white text-purple-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+              >
+                Enter Access Code
+              </button>
+            )}
             <button 
               onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
               className="border-2 border-white text-white px-8 py-4 rounded-full font-semibold text-lg hover:bg-white hover:text-purple-600 transition-all duration-300"
@@ -108,6 +135,55 @@ export const Hero: React.FC = () => {
 
         </div>
       </div>
+
+      {/* Access Code Modal */}
+      {isAccessModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
+            <div className="text-center">
+              <div className="text-4xl mb-4">🔑</div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">Enter Access Code</h3>
+              <p className="text-gray-600 mb-6">
+                Enter your access code to unlock the demo and authentication features.
+              </p>
+              
+              <form onSubmit={handleAccessCodeSubmit} className="space-y-4">
+                <div>
+                  <input
+                    type="text"
+                    value={accessCode}
+                    onChange={(e) => setAccessCodeInput(e.target.value)}
+                    placeholder="Enter access code"
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+                {accessError && (
+                  <div className="text-red-600 text-sm font-medium">
+                    {accessError}
+                  </div>
+                )}
+                <div className="flex gap-3">
+                  <button
+                    type="submit"
+                    disabled={!accessCode}
+                    className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Unlock Access
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAccessModalOpen(false)}
+                    className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-300"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Waitlist Modal */}
       {isWaitlistModalOpen && (
