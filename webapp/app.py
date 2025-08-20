@@ -388,7 +388,7 @@ def clean_glb_asset_properties(glb_data: bytes) -> bytes:
             if hasattr(gltf.asset, 'generator') and gltf.asset.generator:
                 if 'tripo' in gltf.asset.generator.lower():
                     logger.info(f"🧹 Cleaned generator: '{gltf.asset.generator}' -> 'GLB Cleaner'")
-                    gltf.asset.generator = 'GLB Cleaner'
+                    gltf.asset.generator = 'Vicino AI'
             
             if hasattr(gltf.asset, 'copyright') and gltf.asset.copyright:
                 if 'tripo' in gltf.asset.copyright.lower():
@@ -1085,30 +1085,7 @@ def meets_quality_threshold(scores: Dict) -> bool:
         all(score >= 7.0 for score in all_scores)  # Reasonable bar across all metrics
     )
 
-def save_metadata(session_id: str, iteration: int, target_object: str, image_url: str, evaluation_results: Dict, mode: str = "quick") -> str:
-    """Save metadata for this iteration"""
-    session_dir = pathlib.Path(f"generated_images/session_{session_id}")
-    session_dir.mkdir(parents=True, exist_ok=True)
-    
-    metadata_file = session_dir / f"metadata_iteration_{iteration:02d}.json"
-    metadata_data = {
-        "session_id": session_id,
-        "iteration": iteration,
-        "timestamp": datetime.now().isoformat(),
-        "target_object": target_object,
-        "image_url": image_url,
-        "evaluation_results": evaluation_results,
-        "generation_model": "gpt-image-1",
-        "evaluation_model": "gpt-4o",
-        "mode": mode
-    }
-    
 
-    
-    with open(metadata_file, 'w') as f:
-        json.dump(metadata_data, f, indent=2)
-    
-    return str(metadata_file)
 
 def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: str = "quick", image_size: str = DEFAULT_IMAGE_SIZE) -> Dict:
     """Run iterative hybrid multiview generation with different modes"""
@@ -1174,7 +1151,6 @@ def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: s
             "iteration": iteration,
             "image_url": image_url,
             "evaluation": None,  # Will be updated after evaluation
-            "metadata_file": None,  # Will be updated after evaluation
             "evaluation_status": "evaluating"  # Show evaluation progress
         }
         all_results.append(iteration_result)
@@ -1188,12 +1164,8 @@ def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: s
         # Evaluate image with GPT-4 Vision
         evaluation_results = evaluate_image_with_gpt4v(image_url, target_object, iteration)
         
-        # Save metadata
-        metadata_file = save_metadata(session_id, iteration, target_object, image_url, evaluation_results, mode)
-        
         # Update the existing iteration_result with evaluation data
         active_sessions[session_id]["iterations"][-1]["evaluation"] = evaluation_results
-        active_sessions[session_id]["iterations"][-1]["metadata_file"] = metadata_file
         active_sessions[session_id]["iterations"][-1]["evaluation_status"] = "completed"
         
         # Clear evaluation status
