@@ -79,7 +79,7 @@ def upload_image(image: Image.Image, filename: str) -> str:
     print(f"Uploaded {filename}, got token: {image_token}")
     return image_token
 
-def create_multiview_task(views: dict, model_version="v2.5-20250123", texture=True, pbr=True):
+def create_multiview_task(views: dict, model_version="v3.0-20250812", texture=True, pbr=True):
     """Create multiview-to-model task"""
     # Upload each view to get image tokens
     image_tokens = {}
@@ -157,7 +157,7 @@ def save_cropped_views(views: dict, output_dir: str = "cropped_views"):
 
 if __name__ == "__main__":
     # Download the multiview image
-    multiview_url = "https://nzkkbpekateqhygeghmw.supabase.co/storage/v1/object/public/generated-images-bucket/cat_3_20250812_160917.png"
+    multiview_url = "https://nzkkbpekateqhygeghmw.supabase.co/storage/v1/object/public/generated-images-bucket/Libra_vibe_coffee_mug_with_pink_handle_2_20250822_063738.png"
     
     try:
         # Download and process the image

@@ -21,6 +21,8 @@ import aiohttp
 import threading
 import logging
 import stripe
+import re
+import unicodedata
 
 
 # Load environment variables
@@ -37,6 +39,43 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+def sanitize_filename(filename: str) -> str:
+    """
+    Sanitize filename to be compatible with cloud storage services.
+    Removes or replaces non-ASCII characters, special characters, and spaces.
+    
+    Args:
+        filename: Original filename
+        
+    Returns:
+        Sanitized filename safe for cloud storage
+    """
+    # Normalize unicode characters (convert to closest ASCII equivalent)
+    filename = unicodedata.normalize('NFKD', filename)
+    
+    # Replace non-ASCII characters with their closest ASCII equivalent or remove them
+    # This handles Chinese, Japanese, Korean, Arabic, etc.
+    filename = ''.join(c for c in filename if ord(c) < 128)
+    
+    # Replace spaces and special characters with underscores
+    filename = re.sub(r'[^\w\-_.]', '_', filename)
+    
+    # Remove multiple consecutive underscores
+    filename = re.sub(r'_+', '_', filename)
+    
+    # Remove leading/trailing underscores
+    filename = filename.strip('_')
+    
+    # Ensure filename is not empty
+    if not filename:
+        filename = "untitled"
+    
+    # Limit length to avoid issues
+    if len(filename) > 100:
+        filename = filename[:100]
+    
+    return filename
 
 # Import studio module
 # Add the project root directory to Python path
@@ -789,7 +828,8 @@ OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION."""
                     
                     # Generate filename for Supabase
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    filename = f"{target_object.replace(' ', '_')}_{iteration}_{timestamp}.png"
+                    sanitized_object_name = sanitize_filename(target_object)
+                    filename = f"{sanitized_object_name}_{iteration}_{timestamp}.png"
                     
                     # Create temporary file
                     import tempfile
@@ -1555,7 +1595,8 @@ def generate_3d():
         
         # Upload to Supabase
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{target_object.replace(' ', '_')}_{iteration}_{timestamp}.png"
+        sanitized_object_name = sanitize_filename(target_object)
+        filename = f"{sanitized_object_name}_{iteration}_{timestamp}.png"
         
         supabase_url = upload_image_to_supabase(image_data, filename)
         if not supabase_url:
@@ -1995,7 +2036,8 @@ def process_successful_job(info, task_id, session_id, iteration, target_object, 
                     cleaned_glb_data = glb_data
                 
                 # Upload to Supabase 3D files bucket
-                glb_filename = f"{target_object.replace(' ', '_')}_{iteration}_{timestamp}.glb"
+                sanitized_object_name = sanitize_filename(target_object)
+                glb_filename = f"{sanitized_object_name}_{iteration}_{timestamp}.glb"
                 glb_supabase_url = upload_image_to_supabase(
                     cleaned_glb_data, 
                     glb_filename, 
