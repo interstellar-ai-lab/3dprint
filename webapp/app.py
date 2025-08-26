@@ -2076,6 +2076,209 @@ def process_successful_job(info, task_id, session_id, iteration, target_object, 
         logger.error(f"❌ {error_msg}")
         update_job_status(record_id, "failed", error_msg)
 
+@app.route('/api/upload-single-image', methods=['POST'])
+def upload_single_image():
+    """Handle single image upload and direct 3D generation - costs 0.5 credits"""
+    try:
+        # Check user authentication and balance
+        user, error = get_user_from_token()
+        if error:
+            return jsonify({"error": error}), 401
+        
+        # Check if user has enough credits (0.5 USD)
+        has_balance, current_balance = check_user_balance(user.id, 0.5)
+        if not has_balance:
+            return jsonify({
+                "error": "Insufficient credits",
+                "required": 0.5,
+                "current_balance": current_balance,
+                "message": "You need 0.5 credits to generate 3D model from single image. Please add funds to your wallet."
+            }), 402
+        
+        # Check if image file is present
+        if 'image' not in request.files:
+            return jsonify({"error": "Image file is required"}), 400
+        
+        # Get uploaded file
+        image_file = request.files['image']
+        
+        # Validate file
+        if image_file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
+        if not image_file.content_type.startswith('image/'):
+            return jsonify({"error": "File must be an image"}), 400
+        
+        # Generate unique session ID and timestamp
+        session_id = str(uuid.uuid4())
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Read image data for Supabase upload
+        image_file_data = image_file.read()
+        image_file.seek(0)  # Reset file pointer
+        
+        # Upload image to Supabase for database record
+        image_filename = f"single_image_{session_id}_{timestamp}.png"
+        image_supabase_url = upload_image_to_supabase(image_file_data, image_filename)
+        if not image_supabase_url:
+            return jsonify({"error": "Failed to upload image"}), 500
+        
+        # Store file data for direct processing
+        file_data = image_file.read()
+        image_file.seek(0)  # Reset file pointer
+        
+        # Create a target object name based on timestamp
+        target_object = f"single_image_upload_{timestamp}"
+        
+        # Insert record into database with pending status
+        record_id = insert_image_record(target_object, image_supabase_url, 1)
+        if not record_id:
+            return jsonify({"error": "Failed to insert database record"}), 500
+        
+        # Update record with pending status
+        if SUPABASE_AVAILABLE and supabase_client:
+            supabase_client.table('generated_images').update({
+                "status": "running",
+                "task_id": None,  # Will be set when task is created
+                "updated_at": datetime.now().isoformat()
+            }).eq('id', record_id).execute()
+        
+        # Start background processing
+        thread = threading.Thread(
+            target=process_single_image_upload_background,
+            args=(session_id, target_object, file_data, record_id, timestamp)
+        )
+        thread.daemon = True
+        thread.start()
+        
+        # Deduct credits after successful job submission
+        success, new_balance = deduct_credits(user.id, 0.5, f"Single image 3D generation: {target_object}")
+        if not success:
+            logger.error(f"Failed to deduct credits for user {user.id}")
+        
+        return jsonify({
+            "success": True,
+            "session_id": session_id,
+            "record_id": record_id,
+            "status": "running",
+            "status_url": f"/api/generation-status/{record_id}",
+            "message": "Single image upload and 3D generation started successfully",
+            "credits_deducted": 0.5,
+            "remaining_balance": new_balance
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in upload-single-image endpoint: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
+def process_single_image_upload_background(session_id, target_object, file_data, record_id, timestamp):
+    """Background function to process single image upload and 3D generation"""
+    try:
+        # Import the Tripo functions
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+        
+        from test_tripo_single_image_to_3d import create_single_image_task, get_task, download
+        
+        # Convert file data directly to PIL Image
+        from PIL import Image
+        import io
+        
+        try:
+            image = Image.open(io.BytesIO(file_data))
+        except Exception as e:
+            error_msg = f"Failed to process image: {str(e)}"
+            logger.error(f"❌ {error_msg}")
+            update_job_status(record_id, "failed", error_msg)
+            return
+        
+        # Submit to Tripo API
+        task_id = create_single_image_task(image, model_version="v3.0-20250812")
+        
+        # Update record with task_id and processing status
+        if SUPABASE_AVAILABLE and supabase_client:
+            supabase_client.table('generated_images').update({
+                "status": "running",
+                "task_id": task_id,
+                "updated_at": datetime.now().isoformat()
+            }).eq('id', record_id).execute()
+        
+        logger.info(f"✅ Submitted Tripo task {task_id} for single image upload record {record_id}")
+        
+        # Poll for completion
+        max_attempts = 60  # 10 minutes with 10-second intervals
+        for attempt in range(max_attempts):
+            try:
+                info = get_task(task_id)
+                if info.get("code") != 0:
+                    # Log the full error for debugging
+                    logger.error(f"❌ Tripo API error: {info}")
+                    
+                    # Provide user-friendly error message based on error code
+                    error_code = info.get("code")
+                    if error_code == 2010:
+                        user_error_msg = "Generation failed due to insufficient credits. Please try again later or contact support."
+                    elif error_code in [400, 401, 403]:
+                        user_error_msg = "Generation service temporarily unavailable. Please try again later."
+                    elif error_code in [500, 502, 503]:
+                        user_error_msg = "Generation service is experiencing issues. Please try again later."
+                    else:
+                        user_error_msg = "Generation failed. Please try again or contact support if the problem persists."
+                    
+                    update_job_status(record_id, "failed", user_error_msg)
+                    return
+                
+                status = info["data"]["status"]
+                logger.info(f"Task {task_id} status: {status} (attempt {attempt + 1}/{max_attempts})")
+                
+                # Handle finalized statuses
+                if status == "success":
+                    # Process successful completion
+                    process_successful_job(info, task_id, session_id, 1, target_object, record_id, timestamp)
+                    return
+                elif status == "failed":
+                    # Log the full error for debugging
+                    logger.error(f"❌ Tripo task failed: {info}")
+                    user_error_msg = "Generation failed. Please try again or contact support if the problem persists."
+                    update_job_status(record_id, "failed", user_error_msg)
+                    return
+                elif status == "cancelled":
+                    user_error_msg = "Generation was cancelled. Please try again."
+                    logger.warning(f"⚠️ Tripo task was cancelled")
+                    update_job_status(record_id, "cancelled", user_error_msg)
+                    return
+                elif status == "unknown":
+                    user_error_msg = "Generation service is experiencing issues. Please try again later."
+                    logger.error(f"❌ Tripo task status unknown - system level issue")
+                    update_job_status(record_id, "failed", user_error_msg)
+                    return
+                
+                # Handle ongoing statuses
+                elif status in ("queued", "running"):
+                    # Continue polling
+                    pass
+                else:
+                    # Unknown status, log and continue
+                    logger.warning(f"⚠️ Unknown status '{status}' for task {task_id}")
+                
+                import time
+                time.sleep(10)  # Wait 10 seconds before next poll
+                
+            except Exception as e:
+                logger.error(f"Error polling task {task_id}: {e}")
+                if attempt == max_attempts - 1:
+                    update_job_status(record_id, "failed", "Generation timed out. Please try again.")
+                    return
+                time.sleep(10)
+        
+        # If we get here, we've exceeded max attempts
+        update_job_status(record_id, "failed", "Generation timed out. Please try again.")
+        
+    except Exception as e:
+        error_msg = f"Error in single image background processing: {str(e)}"
+        logger.error(f"❌ {error_msg}")
+        update_job_status(record_id, "failed", error_msg)
+
 def update_job_status(record_id, status, error_message=None):
     """Update job status in database"""
     try:

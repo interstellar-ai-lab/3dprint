@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { GenerationForm } from './GenerationForm';
 import { MultiViewUploadForm } from './MultiViewUploadForm';
+import { SingleImageUploadForm } from './SingleImageUploadForm';
 import { StatusDisplay } from './StatusDisplay';
 import { useGenerationStore } from '../stores/generationStore';
 
 export const DemoSection: React.FC = () => {
   const { currentSession } = useGenerationStore();
-  const [mode, setMode] = useState<'ai' | 'upload'>('ai');
+  const [mode, setMode] = useState<'ai' | 'upload' | 'single'>('ai');
 
   const handleUploadSuccess = (data: any) => {
     // Handle successful upload - could set a session or show success message
@@ -44,10 +45,10 @@ export const DemoSection: React.FC = () => {
               
               {/* Mode Toggle */}
               <div className="flex justify-center">
-                <div className="bg-white/20 rounded-lg p-1 flex">
+                <div className="bg-white/20 rounded-lg p-1 flex flex-wrap gap-1">
                   <button
                     onClick={() => setMode('ai')}
-                    className={`px-6 py-2 rounded-md font-medium transition-all duration-200 ${
+                    className={`px-4 py-2 rounded-md font-medium transition-all duration-200 text-sm ${
                       mode === 'ai'
                         ? 'bg-white text-purple-600 shadow-sm'
                         : 'text-white hover:bg-white/10'
@@ -56,14 +57,24 @@ export const DemoSection: React.FC = () => {
                     🤖 AI Generation
                   </button>
                   <button
+                    onClick={() => setMode('single')}
+                    className={`px-4 py-2 rounded-md font-medium transition-all duration-200 text-sm ${
+                      mode === 'single'
+                        ? 'bg-white text-purple-600 shadow-sm'
+                        : 'text-white hover:bg-white/10'
+                    }`}
+                  >
+                    📷 Image to 3D
+                  </button>
+                  <button
                     onClick={() => setMode('upload')}
-                    className={`px-6 py-2 rounded-md font-medium transition-all duration-200 ${
+                    className={`px-4 py-2 rounded-md font-medium transition-all duration-200 text-sm ${
                       mode === 'upload'
                         ? 'bg-white text-purple-600 shadow-sm'
                         : 'text-white hover:bg-white/10'
                     }`}
                   >
-                    📤 Upload Multi-View
+                    📤 Multi-View
                   </button>
                 </div>
               </div>
@@ -73,6 +84,11 @@ export const DemoSection: React.FC = () => {
             <div className="p-8">
               {mode === 'ai' ? (
                 <GenerationForm />
+              ) : mode === 'single' ? (
+                <SingleImageUploadForm 
+                  onSuccess={handleUploadSuccess}
+                  onError={handleUploadError}
+                />
               ) : (
                 <MultiViewUploadForm 
                   onSuccess={handleUploadSuccess}
