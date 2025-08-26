@@ -8,9 +8,7 @@ export interface GenerationSession {
   max_iterations: number;
   current_iteration: number;
   iterations: IterationResult[];
-  final_score: number;
   error?: string;
-  evaluation_status?: string;
   feedback_prompt?: string;
   user_feedback?: string;
 }
@@ -18,15 +16,6 @@ export interface GenerationSession {
 export interface IterationResult {
   iteration: number;
   image_url: string;
-  evaluation?: EvaluationResult;
-  metadata_file?: string;
-  evaluation_status: string;
-}
-
-export interface EvaluationResult {
-  scores: Record<string, number>;
-  issues: string[];
-  suggestions: string[];
 }
 
 interface GenerationStore {

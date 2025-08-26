@@ -853,280 +853,6 @@ OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION."""
         logger.error(f"❌ Error generating with GPT-4 Vision: {e}")
         return None
 
-def evaluate_image_with_gpt4v(image_url: str, target_object: str, iteration: int) -> Dict:
-    """Evaluate generated image using GPT-4 Vision"""
-    
-    evaluation_prompt = f"""Analyze this 2x2 multiview grid image of a {target_object} for 3D reconstruction suitability.
-
-    EVALUATION CRITERIA:
-    1. Image Quality (1-10): Clarity, resolution, lighting, focus
-    2. Grid Structure (1-10): How well the 2x2 grid layout works
-    3. Angle Diversity (1-10): How well the 4 cardinal views (front, back, left, right) are represented
-    4. Object Consistency (1-10): Same object appearance across all views
-    5. Background Cleanliness (1-10): Pure white background
-    6. 3D Reconstruction Suitability (1-10): Overall suitability for 3D reconstruction
-
-    GRID LAYOUT CHECK:
-    - Top Left: Should be FRONT view
-    - Top Right: Should be RIGHT view  
-    - Bottom Left: Should be LEFT view
-    - Bottom Right: Should be BACK view
-
-    OBJECT CONSISTENCY CHECK:
-    - Are all 4 objects the same type? (e.g., all Golden Retrievers)
-    - Are all objects in the same pose? (all standing OR all sitting OR all lying down)
-    - Are all objects the same size and color?
-    - If you see mixed poses (some standing, some sitting), this is a major issue
-
-    SCORING:
-    - Score 10: Perfect quality, meets all requirements
-    - Score 8-9: Excellent quality with minor issues
-    - Score 6-7: Good quality with noticeable issues
-    - Score 4-5: Poor quality with major issues
-    - Score 1-3: Very poor quality or major failures
-
-    Provide your evaluation in this exact format:
-
-    Image Quality: [score]/10
-    Grid Structure: [score]/10
-    Angle Diversity: [score]/10
-    Object Consistency: [score]/10
-    Background Cleanliness: [score]/10
-    3D Reconstruction Suitability: [score]/10
-
-    Overall Score: [average]/10
-
-    Specific Issues Found:
-    - [List any issues you see]
-
-    Suggestions for Improvement:
-    - [List suggestions for improvement]"""
-
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            # Handle both URLs and data URLs
-            if image_url.startswith("data:image/"):
-                # Handle data URL directly
-                # Extract base64 data from data URL
-                header, encoded = image_url.split(",", 1)
-                base64_image = encoded
-            else:
-                # Download and encode the image
-                image = download_image_to_pil_sync(image_url)
-                if not image:
-                    raise Exception("Failed to download image")
-                
-                # Convert to base64
-                buffer = io.BytesIO()
-                image.save(buffer, format='PNG')
-                base64_image = base64.b64encode(buffer.getvalue()).decode('utf-8')
-            
-            # Call GPT-4 Vision API
-            response = openai_sync_client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": evaluation_prompt},
-                            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}"}}
-                        ]
-                    }
-                ],
-                max_tokens=1000,
-                temperature=0.1
-            )
-            
-            evaluation_text = response.choices[0].message.content
-            logger.info(f"🔍 Evaluation completed for iteration {iteration} (text length: {len(evaluation_text)} chars)")
-            
-            # Check if the response indicates failure
-            if "I'm sorry" in evaluation_text or "I can't assist" in evaluation_text:
-                raise Exception("Evaluation agent refused to process the request")
-            
-            # Parse the evaluation
-            parsed_results = parse_evaluation_text(evaluation_text)
-            
-            # Apply penalties if needed
-            parsed_results = apply_object_consistency_penalties(parsed_results, evaluation_text)
-            
-            return parsed_results
-            
-        except Exception as e:
-            logger.error(f"❌ Evaluation attempt {attempt + 1} failed: {e}")
-            if attempt < max_retries - 1:
-                logger.info(f"🔄 Retrying evaluation... (attempt {attempt + 2}/{max_retries})")
-                import time
-                time.sleep(2)  # Wait before retry
-            else:
-                logger.error(f"❌ All evaluation attempts failed, using fallback scores")
-                # Return fallback evaluation results
-                return {
-                    "scores": {
-                        "Image Quality": 5.0,
-                        "Grid Structure": 5.0,
-                        "Angle Diversity": 5.0,
-                        "Object Consistency": 5.0,
-                        "Background Cleanliness": 5.0,
-                        "3D Reconstruction Suitability": 5.0,
-                        "overall": 5.0
-                    },
-                    "issues": ["Evaluation failed - using fallback scores"],
-                    "suggestions": ["Retry evaluation or check image quality"]
-                }
-
-def parse_evaluation_text(text: str) -> Dict:
-    """Parse evaluation text into structured data"""
-    lines = text.split('\n')
-    
-    scores = {}
-    issues = []
-    suggestions = []
-    
-    in_issues = False
-    in_suggestions = False
-    
-    for line in lines:
-        line = line.strip()
-        
-        # Parse scores
-        if ':' in line and '/10' in line:
-            parts = line.split(':')
-            if len(parts) == 2:
-                metric = parts[0].strip()
-                score_part = parts[1].strip()
-                if '/10' in score_part:
-                    try:
-                        score = float(score_part.split('/')[0])
-                        scores[metric] = score
-                    except ValueError:
-                        logger.warning(f"   ❌ Could not parse score from: {line}")
-        
-        # Parse issues and suggestions
-        if "Specific Issues Found:" in line:
-            in_issues = True
-            in_suggestions = False
-            continue
-        elif "Suggestions for Improvement:" in line:
-            in_issues = False
-            in_suggestions = True
-            continue
-        elif line.startswith("Image Quality:") or line.startswith("Grid Structure:") or line.startswith("Overall Score:"):
-            in_issues = False
-            in_suggestions = False
-        
-        # Extract issues
-        if in_issues and line:
-            if line.startswith('-') or line.startswith('•') or line.startswith('*'):
-                issue = line[1:].strip()
-                if issue:  # Only add non-empty issues
-                    issues.append(issue)
-            elif line and not line.startswith('Specific Issues Found:'):
-                issues.append(line)
-        
-        # Extract suggestions
-        if in_suggestions and line:
-            if line.startswith('-') or line.startswith('•') or line.startswith('*'):
-                suggestion = line[1:].strip()
-                if suggestion:  # Only add non-empty suggestions
-                    suggestions.append(suggestion)
-            elif line and not line.startswith('Suggestions for Improvement:'):
-                suggestions.append(line)
-    
-    # Calculate overall score if not present
-    if 'Overall Score' not in scores and scores:
-        overall_score = sum(scores.values()) / len(scores)
-        scores['overall'] = overall_score
-    
-    return {
-        "scores": scores,
-        "issues": issues,
-        "suggestions": suggestions
-    }
-
-def apply_object_consistency_penalties(parsed_results: Dict, evaluation_text: str) -> Dict:
-    """Apply penalties to object consistency scores based on detected issues"""
-    
-    # Check for specific object consistency issues in the evaluation text
-    text_lower = evaluation_text.lower()
-    
-    # Define penalties for different issues
-    penalties = {
-        "mixed_poses": 0,
-        "different_sizes": 0,
-        "different_colors": 0,
-        "pose_inconsistency": 0
-    }
-    
-    # AGGRESSIVE PENALTY DETECTION - Check for any mention of pose-related issues
-    pose_keywords = ["standing", "sitting", "lying", "pose", "position", "posture", "stance"]
-    if any(keyword in text_lower for keyword in pose_keywords):
-        if "inconsistent" in text_lower or "different" in text_lower or "mixed" in text_lower:
-            penalties["pose_inconsistency"] = 4
-            penalties["mixed_poses"] = 4
-    
-    # Check for size issues
-    if "size" in text_lower and ("different" in text_lower or "inconsistent" in text_lower):
-        penalties["different_sizes"] = 3
-    
-    # Check for color/texture issues
-    if "color" in text_lower and ("different" in text_lower or "inconsistent" in text_lower):
-        penalties["different_colors"] = 4
-    
-    # MANUAL OVERRIDE: If Object Consistency score is suspiciously high (9+) but no penalties detected,
-    # apply a conservative penalty to encourage more iterations
-    scores = parsed_results.get("scores", {})
-    if "Object Consistency" in scores:
-        original_score = scores["Object Consistency"]
-        total_penalty = sum(penalties.values())
-        
-        # If score is very high (9+) but no penalties detected, apply conservative penalty
-        if original_score >= 9.0 and total_penalty == 0:
-            # Check if the evaluation mentions any issues at all
-            if "issue" in text_lower or "problem" in text_lower or "variation" in text_lower:
-                penalties["conservative_penalty"] = 2
-                total_penalty = 2
-                logger.info(f"🔍 Applied conservative penalty: High score but issues mentioned")
-        
-        # Apply penalty (minimum score of 1)
-        new_score = max(1, original_score - total_penalty)
-        scores["Object Consistency"] = new_score
-        
-        # Recalculate overall score
-        if scores:
-            overall_score = sum(scores.values()) / len(scores)
-            scores["overall"] = overall_score
-        
-        logger.info(f"🔍 Applied object consistency penalties:")
-        logger.info(f"   Original Object Consistency score: {original_score}")
-        logger.info(f"   Total penalty: {total_penalty}")
-        logger.info(f"   New Object Consistency score: {new_score}")
-        logger.info(f"   New overall score: {overall_score}")
-    
-    return parsed_results
-
-def meets_quality_threshold(scores: Dict) -> bool:
-    """Check if quality threshold is met (REASONABLE STANDARDS - allows iterations for improvement)"""
-    overall = scores.get("overall", 0)
-    grid_structure = scores.get("Grid Structure", 0)
-    angle_diversity = scores.get("Angle Diversity", 0)
-    object_consistency = scores.get("Object Consistency", 0)
-    
-    # REASONABLE thresholds - allows iterations for improvement while maintaining good standards
-    all_scores = [v for k, v in scores.items() if isinstance(v, (int, float)) and k != "overall"]
-    
-    # Check if we have good overall score and reasonable individual scores
-    return (
-        overall >= 8.5 and  # Good overall score
-        grid_structure >= 8.0 and  # Good grid structure
-        angle_diversity >= 8.0 and  # Good angle diversity
-        object_consistency >= 8.5 and  # Good object consistency (pose consistency)
-        all(score >= 7.0 for score in all_scores)  # Reasonable bar across all metrics
-    )
-
-
-
 def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: str = "quick", image_size: str = DEFAULT_IMAGE_SIZE) -> Dict:
     """Run iterative hybrid multiview generation with different modes"""
     
@@ -1155,8 +881,6 @@ def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: s
         "max_iterations": max_iterations,
         "current_iteration": 0,
         "iterations": [],
-        "final_score": 0,
-        "evaluation_status": None
     }
     
     while True:
@@ -1165,8 +889,7 @@ def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: s
         # Check iteration limit based on mode
         if iteration > max_iterations:
             active_sessions[session_id]["status"] = "completed"
-            active_sessions[session_id]["final_score"] = scores.get("overall", 0) if 'scores' in locals() else 0
-            active_sessions[session_id]["message"] = f"Reached maximum iterations ({max_iterations}) for {mode_display} - best result achieved"
+            active_sessions[session_id]["message"] = f"Reached maximum iterations ({max_iterations}) for {mode_display} - generation completed"
             break
         
         # Update session status
@@ -1186,38 +909,15 @@ def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: s
             active_sessions[session_id]["error"] = "Failed to generate image"
             break
         
-        # IMMEDIATELY add the image to session (before evaluation)
+        # Add the image to session
         iteration_result = {
             "iteration": iteration,
-            "image_url": image_url,
-            "evaluation": None,  # Will be updated after evaluation
-            "evaluation_status": "evaluating"  # Show evaluation progress
+            "image_url": image_url
         }
         all_results.append(iteration_result)
         
-        # Update session with iteration data IMMEDIATELY
+        # Update session with iteration data
         active_sessions[session_id]["iterations"].append(iteration_result)
-        
-        # Update session status to show evaluation progress
-        active_sessions[session_id]["evaluation_status"] = f"Evaluating..."
-        
-        # Evaluate image with GPT-4 Vision
-        evaluation_results = evaluate_image_with_gpt4v(image_url, target_object, iteration)
-        
-        # Update the existing iteration_result with evaluation data
-        active_sessions[session_id]["iterations"][-1]["evaluation"] = evaluation_results
-        active_sessions[session_id]["iterations"][-1]["evaluation_status"] = "completed"
-        
-        # Clear evaluation status
-        active_sessions[session_id]["evaluation_status"] = None
-        
-        # Check if quality threshold is met
-        scores = evaluation_results.get("scores", {})
-        if meets_quality_threshold(scores):
-            active_sessions[session_id]["status"] = "completed"
-            active_sessions[session_id]["final_score"] = scores.get("overall", 0)
-            active_sessions[session_id]["message"] = f"Quality threshold met in {mode_display} - generation completed"
-            break
         
         # Store current image URL for next iteration
         previous_image_url = image_url
@@ -1234,24 +934,12 @@ def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: s
         else:
             logger.info(f"📸 Stored image for iteration {iteration}")
         
-        # Prepare feedback for next iteration
-        previous_feedback = evaluation_results.get("suggestions", [])
-        scores = evaluation_results.get("scores", {})
-        issues = evaluation_results.get("issues", [])
-        
-        logger.info(f"📊 Iteration {iteration} Evaluation Results ({mode_display}):")
-        logger.info(f"   Scores: {scores}")
-        logger.info(f"   Issues Found: {issues}")
-        logger.info(f"   Suggestions for Improvement: {previous_feedback}")
-        logger.info(f"   Overall Score: {scores.get('overall', 'N/A')}/10")
-        logger.info(f"   Remaining iterations: {max_iterations - iteration}")
-        
         # Pause for user feedback (except for the last iteration)
         if iteration < max_iterations:
             logger.info(f"⏸️ Pausing for user feedback after iteration {iteration}")
             active_sessions[session_id]["status"] = "waiting_for_feedback"
             active_sessions[session_id]["current_iteration"] = iteration
-            active_sessions[session_id]["feedback_prompt"] = f"Evaluation complete for iteration {iteration}. Any suggestions for improvement?"
+            active_sessions[session_id]["feedback_prompt"] = f"Generation complete for iteration {iteration}. Any suggestions for improvement?"
             
             # Wait for user feedback (no timeout)
             import time
@@ -1266,7 +954,7 @@ def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: s
                 # Store user feedback separately for high priority handling
                 active_sessions[session_id]["user_feedback_for_next"] = user_feedback
             else:
-                logger.info(f"⏭️ No user feedback provided, continuing with AI suggestions")
+                logger.info(f"⏭️ No user feedback provided, continuing with next iteration")
                 active_sessions[session_id]["user_feedback_for_next"] = ""
         
         # Add a minimal delay between iterations to prevent overwhelming the API
@@ -1278,8 +966,7 @@ def run_hybrid_multiview_generation(session_id: str, target_object: str, mode: s
         "target_object": target_object,
         "mode": mode,
         "max_iterations": max_iterations,
-        "iterations": all_results,
-        "final_score": active_sessions[session_id]["final_score"]
+        "iterations": all_results
     }
 
 @app.route('/')
@@ -1373,9 +1060,7 @@ def get_status(session_id):
             "max_iterations": session["max_iterations"],
             "current_iteration": session["current_iteration"],
             "iterations": session["iterations"],
-            "final_score": session["final_score"],
             "error": session.get("error", None),
-            "evaluation_status": session.get("evaluation_status", None),
             "feedback_prompt": session.get("feedback_prompt", None),
             "user_feedback": session.get("user_feedback", None)
         })
@@ -1533,8 +1218,7 @@ def list_sessions():
                 "target_object": session_data["target_object"],
                 "mode": session_data["mode"],
                 "max_iterations": session_data["max_iterations"],
-                "current_iteration": session_data["current_iteration"],
-                "final_score": session_data["final_score"]
+                "current_iteration": session_data["current_iteration"]
             })
         
         return jsonify({"sessions": sessions})

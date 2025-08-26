@@ -4,14 +4,12 @@ import {
   CheckCircleIcon, 
   ExclamationTriangleIcon, 
   ClockIcon,
-  EyeIcon,
   DocumentTextIcon,
   ChatBubbleLeftIcon
 } from '@heroicons/react/24/outline';
 import { useGenerationStore } from '../stores/generationStore';
 import { getSessionStatus } from '../api/generationApi';
 import { ImageGrid } from './ImageGrid';
-import { EvaluationResults } from './EvaluationResults';
 import { FeedbackPrompt } from './FeedbackPrompt';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://vicino.ai';
@@ -103,27 +101,9 @@ export const StatusDisplay: React.FC = () => {
           </div>
         )}
 
-        {/* Current Activity Status */}
-        {currentSession.status === 'running' && currentSession.evaluation_status && (
-          <div className="flex items-center space-x-2 text-sm text-blue-600">
-            <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            <span className="font-medium">
-              {currentSession.evaluation_status}
-            </span>
-          </div>
-        )}
 
-        {/* Final Score */}
-        {currentSession.status === 'completed' && currentSession.final_score > 0 && (
-          <div className="mt-4 p-4 bg-green-50 rounded-lg">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-green-800">Generation Completed</span>
-              <span className="text-2xl font-bold text-green-600">
-                ✅ Success
-              </span>
-            </div>
-          </div>
-        )}
+
+
 
         {/* Error Display */}
         {currentSession.status === 'failed' && currentSession.error && (
@@ -145,9 +125,6 @@ export const StatusDisplay: React.FC = () => {
               <div key={index} className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-2">
-                    <span className="text-sm text-gray-500">
-                      {iteration.evaluation_status}
-                    </span>
                     {/* Progress indicator for current iteration */}
                     {currentSession.status === 'running' && 
                      iteration.iteration === currentSession.current_iteration && (
@@ -176,30 +153,45 @@ export const StatusDisplay: React.FC = () => {
                   }
                 />
 
-                {/* Evaluation Results */}
-                <EvaluationResults 
-                  evaluation={iteration.evaluation}
-                  sessionId={currentSession.session_id}
-                  iteration={iteration.iteration}
-                  isWaitingForFeedback={
-                    currentSession.status === 'waiting_for_feedback' && 
-                    iteration.iteration === currentSession.current_iteration
-                  }
-                  feedbackPrompt={currentSession.feedback_prompt}
-                  userFeedback={iterationFeedback[iteration.iteration]}
-                  isEvaluating={
-                    currentSession.status === 'running' && 
-                    iteration.iteration === currentSession.current_iteration &&
-                    !iteration.evaluation
-                  }
-                  onFeedbackSubmitted={(feedback: string) => {
-                    console.log('Feedback submitted for iteration', iteration.iteration, feedback);
-                    setIterationFeedback(prev => ({
-                      ...prev,
-                      [iteration.iteration]: feedback
-                    }));
-                  }}
-                />
+                {/* User Feedback Section */}
+                {currentSession.session_id && iteration.iteration && (
+                  <div className="mt-6">
+                    {currentSession.status === 'waiting_for_feedback' && 
+                     iteration.iteration === currentSession.current_iteration && 
+                     currentSession.feedback_prompt ? (
+                      <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4">
+                        <FeedbackPrompt
+                          sessionId={currentSession.session_id}
+                          feedbackPrompt={currentSession.feedback_prompt}
+                          onFeedbackSubmitted={(feedback: string) => {
+                            console.log('Feedback submitted for iteration', iteration.iteration, feedback);
+                            setIterationFeedback(prev => ({
+                              ...prev,
+                              [iteration.iteration]: feedback
+                            }));
+                          }}
+                        />
+                      </div>
+                    ) : iterationFeedback[iteration.iteration] ? (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div className="flex items-start space-x-3">
+                          <ChatBubbleLeftIcon className="w-5 h-5 text-green-600 mt-0.5" />
+                          <div className="flex-1">
+                            <h5 className="font-semibold text-green-800 mb-2">
+                              Your Feedback (Iteration {iteration.iteration})
+                            </h5>
+                            <p className="text-green-700 text-sm">
+                              {iterationFeedback[iteration.iteration]}
+                            </p>
+                            <p className="text-green-600 text-xs mt-2">
+                              This feedback will be incorporated into the next iteration.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
 
                 {/* Next Generation Indicator - Show at bottom of previous iteration */}
                 {currentSession.status === 'running' && 
