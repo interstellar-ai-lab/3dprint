@@ -79,7 +79,7 @@ def upload_image(image: Image.Image, filename: str) -> str:
     print(f"Uploaded {filename}, got token: {image_token}")
     return image_token
 
-def create_multiview_task(views: dict, model_version="v3.0-20250812", texture=True, pbr=True):
+def create_multiview_task(views: dict, model_version="v2.5-20250123", texture=True, pbr=True):
     """Create multiview-to-model task"""
     # Upload each view to get image tokens
     image_tokens = {}
