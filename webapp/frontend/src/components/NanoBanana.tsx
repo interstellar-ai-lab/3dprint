@@ -313,17 +313,13 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
 
             {/* Action Buttons */}
             <div className="bg-white rounded-2xl shadow-xl p-6">
-              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-blue-800 font-medium">💰 Cost per edit:</span>
-                  <span className="text-blue-600 font-semibold">$0.10</span>
-                </div>
-                {!user && (
-                  <p className="text-blue-600 text-xs mt-1">
+              {!user && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-blue-600 text-xs">
                     Please sign in to use Nano Banana
                   </p>
-                )}
-              </div>
+                </div>
+              )}
               
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
@@ -400,9 +396,6 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
                               </p>
                               <p className="text-green-600 text-sm">
                                 {result.filename} • {result.timestamp}
-                              </p>
-                              <p className="text-green-600 text-xs">
-                                💰 $0.10 deducted from your wallet
                               </p>
                             </div>
                             <button
