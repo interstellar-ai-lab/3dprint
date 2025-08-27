@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { GenerationForm } from './GenerationForm';
 import { MultiViewUploadForm } from './MultiViewUploadForm';
 import { SingleImageUploadForm } from './SingleImageUploadForm';
+import { NanoBanana } from './NanoBanana';
 import { StatusDisplay } from './StatusDisplay';
 import { useGenerationStore } from '../stores/generationStore';
 
 export const DemoSection: React.FC = () => {
   const { currentSession } = useGenerationStore();
-  const [mode, setMode] = useState<'ai' | 'upload' | 'single'>('ai');
+  const [mode, setMode] = useState<'ai' | 'upload' | 'single' | 'nano'>('ai');
 
   const handleUploadSuccess = (data: any) => {
     // Handle successful upload - could set a session or show success message
@@ -57,6 +58,16 @@ export const DemoSection: React.FC = () => {
                     🤖 AI Generation
                   </button>
                   <button
+                    onClick={() => setMode('nano')}
+                    className={`px-4 py-2 rounded-md font-medium transition-all duration-200 text-sm ${
+                      mode === 'nano'
+                        ? 'bg-white text-purple-600 shadow-sm'
+                        : 'text-white hover:bg-white/10'
+                    }`}
+                  >
+                    🍌 Nano Banana
+                  </button>
+                  <button
                     onClick={() => setMode('single')}
                     className={`px-4 py-2 rounded-md font-medium transition-all duration-200 text-sm ${
                       mode === 'single'
@@ -84,6 +95,8 @@ export const DemoSection: React.FC = () => {
             <div className="p-8">
               {mode === 'ai' ? (
                 <GenerationForm />
+              ) : mode === 'nano' ? (
+                <NanoBanana />
               ) : mode === 'single' ? (
                 <SingleImageUploadForm 
                   onSuccess={handleUploadSuccess}

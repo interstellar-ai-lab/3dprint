@@ -695,6 +695,14 @@ CRITICAL OBJECT CONSISTENCY REQUIREMENTS (MOST IMPORTANT):
 - NO different objects in different grid positions
 - NO mixed object types (e.g., some Golden Retrievers, some other dog breeds)
 
+BACKGROUND AND LIGHTING REQUIREMENTS:
+- PURE WHITE background (#FFFFFF) across ALL 4 views
+- NO shadows cast by the object on the background
+- NO background textures, patterns, or gradients
+- NO environmental lighting effects
+- Clean, studio-like lighting that evenly illuminates the object
+- Object should appear to float on pure white background
+
 VIEW REQUIREMENTS:
 - FRONT view: Object facing directly toward the camera
 - RIGHT view: Object rotated 90 degrees to show right side
@@ -764,6 +772,14 @@ This user feedback MUST be addressed and implemented. It takes precedence over a
 ADDITIONAL AI SUGGESTIONS (if any):
 {ai_feedback_text if previous_feedback else "No additional AI suggestions"}
 
+BACKGROUND AND LIGHTING REQUIREMENTS:
+- PURE WHITE background (#FFFFFF) across ALL 4 views
+- NO shadows cast by the object on the background
+- NO background textures, patterns, or gradients
+- NO environmental lighting effects
+- Clean, studio-like lighting that evenly illuminates the object
+- Object should appear to float on pure white background
+
 CRITICAL: The user's specific request above MUST be prioritized and implemented. Maintain the overall structure and good aspects while addressing the user's feedback."""
                 else:
                     edit_instructions = f"""Improve this 2x2 multiview image of {target_object} by addressing these specific issues: {ai_feedback_text}. Maintain the overall structure and good aspects while fixing the identified problems.
@@ -784,6 +800,14 @@ VIEW REQUIREMENTS:
 - RIGHT view: Object rotated 90 degrees to show right side
 - LEFT view: Object rotated 90 degrees to show left side  
 - BACK view: Object rotated 180 degrees to show back/rear
+
+BACKGROUND AND LIGHTING REQUIREMENTS:
+- PURE WHITE background (#FFFFFF) across ALL 4 views
+- NO shadows cast by the object on the background
+- NO background textures, patterns, or gradients
+- NO environmental lighting effects
+- Clean, studio-like lighting that evenly illuminates the object
+- Object should appear to float on pure white background
 
 OBJECT CONSISTENCY IS THE MOST CRITICAL FACTOR FOR 3D RECONSTRUCTION."""
                 
@@ -2726,6 +2750,240 @@ def stripe_webhook():
                 logger.error(f"❌ Error recording failed transaction: {str(e)}")
     
     return jsonify({'status': 'success'})
+
+# ============================================================================
+# NANO BANANA AI IMAGE EDITING ROUTES
+# ============================================================================
+
+# Try to import Google Generative AI for Nano Banana
+try:
+    import google.generativeai as genai
+    NANO_GEMINI_AVAILABLE = True
+    logger.info("✅ Google Generative AI imported for Nano Banana")
+except ImportError as e:
+    logger.warning(f"⚠️ Google Generative AI not available for Nano Banana: {e}")
+    NANO_GEMINI_AVAILABLE = False
+
+def setup_nano_gemini():
+    """Setup Gemini API configuration for Nano Banana."""
+    if not NANO_GEMINI_AVAILABLE:
+        return False, "Google Generative AI not available"
+    
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return False, "GEMINI_API_KEY environment variable not found"
+    
+    try:
+        genai.configure(api_key=api_key)
+        logger.info("✅ Nano Banana Gemini API configured successfully")
+        return True, "Gemini API configured successfully"
+    except Exception as e:
+        logger.error(f"❌ Nano Banana Gemini API configuration failed: {e}")
+        return False, f"Gemini API configuration failed: {e}"
+
+def process_nano_image_with_gemini(image_bytes, edit_instruction):
+    """
+    Process image using Gemini AI for Nano Banana.
+    
+    Args:
+        image_bytes: Raw image bytes
+        edit_instruction: Text instruction for editing
+        
+    Returns:
+        tuple: (success, result_data, error_message)
+    """
+    try:
+        # Create the model
+        model = genai.GenerativeModel("gemini-2.5-flash-image-preview")
+        
+        # Create image part using current SDK approach
+        image_part = {
+            "inline_data": {
+                "data": image_bytes,
+                "mime_type": "image/jpeg"
+            }
+        }
+        
+        # Create content
+        contents = [image_part, edit_instruction]
+        
+        logger.info(f"Nano Banana: Processing image with instruction: {edit_instruction}")
+        
+        # Generate response
+        response = model.generate_content(contents)
+        
+        # Check for generated image
+        for part in response.candidates[0].content.parts:
+            if hasattr(part, 'inline_data') and part.inline_data:
+                # Convert base64 to image
+                image_data = part.inline_data.data
+                edited_image = Image.open(io.BytesIO(image_data))
+                
+                # Save to bytes
+                output_buffer = io.BytesIO()
+                edited_image.save(output_buffer, format='PNG')
+                output_buffer.seek(0)
+                
+                logger.info(f"✅ Nano Banana: Image generated successfully: {edited_image.size}")
+                return True, output_buffer.getvalue(), None
+                
+            elif hasattr(part, 'text') and part.text:
+                logger.info(f"Nano Banana: Model text response: {part.text}")
+        
+        return False, None, "No image was generated by the model"
+        
+    except Exception as e:
+        logger.error(f"❌ Nano Banana: Gemini processing failed: {e}")
+        return False, None, f"Processing failed: {e}"
+
+@app.route('/api/nano/health', methods=['GET'])
+def nano_health_check():
+    """Health check endpoint for Nano Banana."""
+    gemini_status, gemini_message = setup_nano_gemini()
+    
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.utcnow().isoformat(),
+        'service': 'nano-banana',
+        'gemini_available': NANO_GEMINI_AVAILABLE,
+        'gemini_status': gemini_status,
+        'gemini_message': gemini_message
+    })
+
+@app.route('/api/nano/edit', methods=['POST'])
+def nano_edit_image():
+    """
+    Main endpoint for Nano Banana AI image editing.
+    
+    Expected JSON payload:
+    {
+        "image": "base64_encoded_image",
+        "instruction": "Make this image look like a painting by Van Gogh"
+    }
+    
+    Requires Authorization header with Bearer token
+    """
+    try:
+        # Check if Gemini is available
+        if not NANO_GEMINI_AVAILABLE:
+            return jsonify({
+                'success': False,
+                'error': 'Google Generative AI service not available'
+            }), 503
+        
+        # Setup Gemini
+        gemini_ok, gemini_message = setup_nano_gemini()
+        if not gemini_ok:
+            return jsonify({
+                'success': False,
+                'error': gemini_message
+            }), 500
+        
+        # Check user authentication
+        user, auth_error = get_user_from_token()
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': auth_error or 'Authentication required'
+            }), 401
+        
+        # Check user balance (Nano Banana costs $0.10)
+        required_credits = 0.1
+        has_balance, current_balance = check_user_balance(user.id, required_credits)
+        
+        if not has_balance:
+            return jsonify({
+                'success': False,
+                'error': f'Insufficient credits. Required: ${required_credits}, Available: ${current_balance:.2f}',
+                'current_balance': current_balance,
+                'required_credits': required_credits
+            }), 402
+        
+        # Get request data
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'No JSON data provided'
+            }), 400
+        
+        # Validate required fields
+        if 'image' not in data or 'instruction' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required fields: image and instruction'
+            }), 400
+        
+        # Decode base64 image
+        try:
+            image_data = base64.b64decode(data['image'])
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid image data: {e}'
+            }), 400
+        
+        # Validate image
+        try:
+            image = Image.open(io.BytesIO(image_data))
+            image.verify()
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid image format: {e}'
+            }), 400
+        
+        # Process image with Gemini
+        success, result_data, error_message = process_nano_image_with_gemini(
+            image_data, 
+            data['instruction']
+        )
+        
+        if not success:
+            return jsonify({
+                'success': False,
+                'error': error_message
+            }), 500
+        
+        # Deduct credits for successful processing
+        deduction_success, new_balance = deduct_credits(
+            user.id, 
+            required_credits, 
+            f"Nano Banana image edit: {data['instruction'][:50]}..."
+        )
+        
+        if not deduction_success:
+            logger.error(f"❌ Nano Banana: Failed to deduct credits for user {user.id}")
+            # Note: We still return the result since the processing was successful
+            # The credit deduction failure will be logged for manual review
+        
+        # Convert result to base64
+        result_base64 = base64.b64encode(result_data).decode('utf-8')
+        
+        # Generate unique filename
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        unique_id = str(uuid.uuid4())[:8]
+        filename = f"nano_banana_{timestamp}_{unique_id}.png"
+        
+        logger.info(f"✅ Nano Banana: Image edited successfully for user {user.id}: {filename}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Image edited successfully',
+            'image': result_base64,
+            'filename': filename,
+            'timestamp': timestamp,
+            'size': len(result_data),
+            'credits_deducted': required_credits,
+            'new_balance': new_balance
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Nano Banana: Unexpected error in edit_image: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Unexpected error: {e}'
+        }), 500
 
 if __name__ == '__main__':
     # For production deployment on EC2

@@ -9,4 +9,5 @@ gunicorn==21.2.0
 requests>=2.31.0
 pygltflib>=1.16.0
 psycopg2-binary>=2.9.0
-stripe>=7.0.0 
+stripe>=7.0.0
+google-generativeai>=0.8.0 
