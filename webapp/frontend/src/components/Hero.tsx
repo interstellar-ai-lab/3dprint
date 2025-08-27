@@ -68,11 +68,11 @@ export const Hero: React.FC = () => {
         </div>
         
         <div className="relative z-10">
-          <div className="mb-6 space-y-3">
+          {/* <div className="mb-6 space-y-3">
             <div className="inline-block bg-gradient-to-r from-blue-500 to-green-500 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-medium">
               🏆 Partner with Google Cloud
             </div>
-          </div>
+          </div> */}
           
           <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
             <span className="block">Vicino AI</span>

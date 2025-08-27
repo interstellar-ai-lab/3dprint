@@ -65,7 +65,7 @@ export const DemoSection: React.FC = () => {
                         : 'text-white hover:bg-white/10'
                     }`}
                   >
-                    🍌 Nano Banana
+                    🎨 AI Image Edit
                   </button>
                   <button
                     onClick={() => setMode('single')}

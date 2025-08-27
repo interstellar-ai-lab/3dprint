@@ -91,7 +91,7 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
 
   const handleSubmit = async () => {
     if (!user) {
-      setError('Please sign in to use Nano Banana');
+      setError('Please sign in to use AI image editing');
       return;
     }
 
@@ -205,15 +205,14 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
     <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50 py-8 px-4">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-12">
-          <div className="inline-block mb-6 animate-fade-in">
-            <div className="text-6xl mb-4">🍌</div>
-            <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-yellow-600 via-orange-600 to-red-600 bg-clip-text text-transparent">
-              Nano Banana
-            </h1>
-          </div>
+                  <div className="text-center mb-12">
+            <div className="inline-block mb-6 animate-fade-in">
+              <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                AI Image Editor
+              </h1>
+            </div>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto animate-fade-in-delay">
-            Transform your images with AI magic using Google Gemini. 
+            Transform your images with AI magic.
             Upload an image, describe your vision, and watch the magic happen!
           </p>
         </div>
@@ -316,7 +315,7 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
               {!user && (
                 <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <p className="text-blue-600 text-xs">
-                    Please sign in to use Nano Banana
+                    Please sign in to use AI image editing
                   </p>
                 </div>
               )}
@@ -337,7 +336,7 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
                       <span>Processing...</span>
                     </div>
                   ) : (
-                    '🚀 Transform Image'
+                    '🚀 Edit Image'
                   )}
                 </button>
                 
@@ -357,7 +356,7 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
             {/* Results Display */}
             <div className="bg-white rounded-2xl shadow-xl p-6 min-h-[400px]">
               <h3 className="text-xl font-semibold text-gray-800 mb-4">
-                🎨 Your Transformed Image
+                🎨 Your Edited Image
               </h3>
               
                              <div className="transition-all duration-300">
@@ -392,7 +391,7 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="text-green-800 font-medium">
-                                Image transformed successfully!
+                                Image edited successfully!
                               </p>
                               <p className="text-green-600 text-sm">
                                 {result.filename} • {result.timestamp}
@@ -411,7 +410,7 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
                       <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
                         <div className="text-4xl mb-2">❌</div>
                         <h4 className="text-lg font-semibold text-red-800 mb-2">
-                          Transformation Failed
+                          Edit Failed
                         </h4>
                         <p className="text-red-600 mb-4">
                           {result.error}
@@ -441,11 +440,7 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
 
             {/* Info Panel */}
             <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-2xl p-6 border border-orange-200">
-              <h4 className="text-lg font-semibold text-orange-800 mb-3">
-                🚀 Powered by Google Gemini
-              </h4>
               <ul className="space-y-2 text-sm text-orange-700">
-                <li>• Uses Gemini 2.5 Flash Image Preview model</li>
                 <li>• High-quality AI image transformation</li>
                 <li>• Fast processing (10-30 seconds)</li>
                 <li>• Supports various artistic styles</li>
