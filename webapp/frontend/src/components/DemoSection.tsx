@@ -8,7 +8,7 @@ import { useGenerationStore } from '../stores/generationStore';
 
 export const DemoSection: React.FC = () => {
   const { currentSession } = useGenerationStore();
-  const [mode, setMode] = useState<'ai' | 'upload' | 'single' | 'nano'>('ai');
+  const [mode, setMode] = useState<'ai' | 'upload' | 'single' | 'nano'>('nano');
 
   const handleUploadSuccess = (data: any) => {
     // Handle successful upload - could set a session or show success message
@@ -48,16 +48,6 @@ export const DemoSection: React.FC = () => {
               <div className="flex justify-center">
                 <div className="bg-white/20 rounded-lg p-1 flex flex-wrap gap-1">
                   <button
-                    onClick={() => setMode('ai')}
-                    className={`px-4 py-2 rounded-md font-medium transition-all duration-200 text-sm ${
-                      mode === 'ai'
-                        ? 'bg-white text-purple-600 shadow-sm'
-                        : 'text-white hover:bg-white/10'
-                    }`}
-                  >
-                    🤖 AI Generation
-                  </button>
-                  <button
                     onClick={() => setMode('nano')}
                     className={`px-4 py-2 rounded-md font-medium transition-all duration-200 text-sm ${
                       mode === 'nano'
@@ -66,6 +56,16 @@ export const DemoSection: React.FC = () => {
                     }`}
                   >
                     🎨 AI Image Edit
+                  </button>
+                  <button
+                    onClick={() => setMode('ai')}
+                    className={`px-4 py-2 rounded-md font-medium transition-all duration-200 text-sm ${
+                      mode === 'ai'
+                        ? 'bg-white text-purple-600 shadow-sm'
+                        : 'text-white hover:bg-white/10'
+                    }`}
+                  >
+                    🤖 AI Generation
                   </button>
                   <button
                     onClick={() => setMode('single')}

@@ -393,9 +393,6 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
                               <p className="text-green-800 font-medium">
                                 Image edited successfully!
                               </p>
-                              <p className="text-green-600 text-sm">
-                                {result.filename} • {result.timestamp}
-                              </p>
                             </div>
                             <button
                               onClick={downloadResult}
