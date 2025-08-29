@@ -112,7 +112,15 @@ The frontend can be deployed to various platforms:
 Create a `.env` file in the root directory:
 
 ```env
+# Backend API URL
 REACT_APP_API_URL=http://localhost:8001
+
+# Frontend base URL (for auth redirects)
+REACT_APP_BASE_URL=http://localhost:8000
+
+# Supabase configuration
+REACT_APP_SUPABASE_URL=your_supabase_url_here
+REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 ```
 
 ## Contributing
