@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase, User, AuthState } from '../lib/supabase'
+import { checkUserExists } from '../api/generationApi'
 
 // TypeScript declarations for Google One Tap
 declare global {
@@ -105,6 +106,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUpWithEmail = async (email: string, password: string) => {
     try {
+      // First check if user already exists
+      try {
+        const userCheck = await checkUserExists(email)
+        if (userCheck.exists) {
+          return { error: 'An account with this email already exists. Please sign in instead.' }
+        }
+      } catch (checkError) {
+        // If the check fails, continue with signup and let Supabase handle the error
+        console.warn('Could not check user existence, proceeding with signup:', checkError)
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -114,6 +126,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       })
       
       if (error) {
+        // Check if the error is due to user already existing
+        if (error.message.includes('User already registered') || error.message.includes('already exists')) {
+          return { error: 'An account with this email already exists. Please sign in instead.' }
+        }
         return { error: error.message }
       }
       

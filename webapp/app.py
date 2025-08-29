@@ -2519,7 +2519,7 @@ def credit_wallet_by_email():
             # You might need to adjust this based on your Supabase setup
             user_response = supabase_client.auth.admin.list_users()
             user = None
-            for u in user_response.users:
+            for u in user_response:
                 if u.email == user_email:
                     user = u
                     break
@@ -2656,7 +2656,7 @@ def credit_wallet_by_email(email: str, amount: float, payment_intent_id: str = N
         # Find user by email
         user_response = supabase_client.auth.admin.list_users()
         user = None
-        for u in user_response:  # user_response is already a list
+        for u in user_response:  # user_response is a list
             if u.email == email:
                 user = u
                 break
@@ -2984,6 +2984,43 @@ def nano_edit_image():
             'success': False,
             'error': f'Unexpected error: {e}'
         }), 500
+
+@app.route('/api/auth/check-user', methods=['POST'])
+def check_user_exists():
+    """Check if a user exists by email"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        
+        if not email:
+            return jsonify({'error': 'Email is required'}), 400
+        
+        if not SUPABASE_AVAILABLE:
+            return jsonify({'error': 'Database not available'}), 500
+        
+        # Check if user exists in Supabase auth
+        try:
+            user_response = supabase_client.auth.admin.list_users()
+            user_exists = False
+            
+            # user_response is a list, not an object with .users property
+            for user in user_response:
+                if user.email == email:
+                    user_exists = True
+                    break
+            
+            return jsonify({
+                'exists': user_exists,
+                'email': email
+            }), 200
+            
+        except Exception as e:
+            logger.error(f"❌ Error checking user existence: {str(e)}")
+            return jsonify({'error': 'Could not check user existence'}), 500
+        
+    except Exception as e:
+        logger.error(f"❌ Check user error: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
     # For production deployment on EC2

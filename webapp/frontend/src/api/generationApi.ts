@@ -66,3 +66,8 @@ export const healthCheck = async (): Promise<{ status: string; timestamp: string
   const response = await api.get('/api/health');
   return response.data;
 };
+
+export const checkUserExists = async (email: string): Promise<{ exists: boolean; email: string }> => {
+  const response = await api.post('/api/auth/check-user', { email });
+  return response.data;
+};
