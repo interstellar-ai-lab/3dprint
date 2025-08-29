@@ -1,29 +1,29 @@
 import React, { useState } from 'react';
-import { useAccessCode } from '../contexts/AccessCodeContext';
+// import { useAccessCode } from '../contexts/AccessCodeContext';
 
 export const Hero: React.FC = () => {
   const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://vicino.ai';
-  const { hasAccess, setAccessCode } = useAccessCode();
+  // const { hasAccess, setAccessCode } = useAccessCode();
   const [isWaitlistModalOpen, setIsWaitlistModalOpen] = useState(false);
-  const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
-  const [accessCode, setAccessCodeInput] = useState('');
-  const [accessError, setAccessError] = useState('');
+  // const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
+  // const [accessCode, setAccessCodeInput] = useState('');
+  // const [accessError, setAccessError] = useState('');
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
-  const handleAccessCodeSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setAccessError('');
-    
-    const isValid = setAccessCode(accessCode);
-    if (isValid) {
-      setIsAccessModalOpen(false);
-      setAccessCodeInput('');
-    } else {
-      setAccessError('Invalid access code. Please try again.');
-    }
-  };
+  // const handleAccessCodeSubmit = (e: React.FormEvent) => {
+  //   e.preventDefault();
+  //   setAccessError('');
+  //   
+  //   const isValid = setAccessCode(accessCode);
+  //   if (isValid) {
+  //     setIsAccessModalOpen(false);
+  //     setAccessCodeInput('');
+  //   } else {
+  //     setAccessError('Invalid access code. Please try again.');
+  //   }
+  // };
 
   const handleWaitlistSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,21 +86,12 @@ export const Hero: React.FC = () => {
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
-            {hasAccess ? (
-              <button 
-                onClick={() => document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth' })}
-                className="bg-white text-purple-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
-              >
-                Try Demo Now
-              </button>
-            ) : (
-              <button 
-                onClick={() => setIsAccessModalOpen(true)}
-                className="bg-white text-purple-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
-              >
-                Enter Access Code
-              </button>
-            )}
+            <button 
+              onClick={() => document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth' })}
+              className="bg-white text-purple-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+            >
+              Try Demo Now
+            </button>
             <button 
               onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
               className="border-2 border-white text-white px-8 py-4 rounded-full font-semibold text-lg hover:bg-white hover:text-purple-600 transition-all duration-300"
@@ -136,8 +127,8 @@ export const Hero: React.FC = () => {
         </div>
       </div>
 
-      {/* Access Code Modal */}
-      {isAccessModalOpen && (
+      {/* Access Code Modal - Commented out */}
+      {/* {isAccessModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
             <div className="text-center">
@@ -183,7 +174,7 @@ export const Hero: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Waitlist Modal */}
       {isWaitlistModalOpen && (
