@@ -21,11 +21,11 @@ const queryClient = new QueryClient();
 
 // Conditional wrapper for auth components
 const ConditionalAuthWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { hasAccess } = useAccessCode();
+  // const { hasAccess } = useAccessCode();
   
-  if (!hasAccess) {
-    return <>{children}</>;
-  }
+  // if (!hasAccess) {
+  //   return <>{children}</>;
+  // }
   
   return (
     <AuthProvider>
@@ -38,12 +38,12 @@ const ConditionalAuthWrapper: React.FC<{ children: React.ReactNode }> = ({ child
 // Main landing page component
 const HomePage: React.FC = () => {
   const [walletOpen, setWalletOpen] = useState(false);
-  const { hasAccess } = useAccessCode();
+  // const { hasAccess } = useAccessCode();
 
   return (
     <div className="min-h-screen">
       {/* Navigation */}
-      {hasAccess && <Navigation onWalletOpen={() => setWalletOpen(true)} />}
+      <Navigation onWalletOpen={() => setWalletOpen(true)} />
       
       {/* Hero Section */}
       <Hero />
@@ -54,11 +54,9 @@ const HomePage: React.FC = () => {
       </section> */}
       
       {/* Demo Section */}
-      {hasAccess && (
-        <section id="demo">
-          <DemoSection />
-        </section>
-      )}
+      <section id="demo">
+        <DemoSection />
+      </section>
       
       {/* Market Section */}
       <section id="market">
@@ -74,12 +72,10 @@ const HomePage: React.FC = () => {
       <Footer />
       
       {/* Wallet Modal */}
-      {hasAccess && (
-        <Wallet
-          isOpen={walletOpen}
-          onClose={() => setWalletOpen(false)}
-        />
-      )}
+      <Wallet
+        isOpen={walletOpen}
+        onClose={() => setWalletOpen(false)}
+      />
     </div>
   );
 };
