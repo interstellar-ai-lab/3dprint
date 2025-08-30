@@ -16,7 +16,9 @@ interface EditResult {
 export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
   const { user } = useAuth();
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [referenceImages, setReferenceImages] = useState<File[]>([]);
   const [imagePreview, setImagePreview] = useState<string>('');
+  const [referencePreviews, setReferencePreviews] = useState<string[]>([]);
   const [instruction, setInstruction] = useState('Create a 1/7 scale commercialized figure of thecharacter in the illustration, in a realistic styie and environment. Place the figure on a computer desk, using a circular transparent acrylic base without any text.On the computer screen, display the ZBrush modeling process of the figure. Next to the computer screen, place a BANDAl-style toy packaging box printedwith the original artwork');
   const [result, setResult] = useState<EditResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -24,6 +26,7 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
   const [error, setError] = useState<string>('');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const referenceFileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
   // Sample instructions for inspiration
@@ -89,6 +92,54 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
     }
   };
 
+  const handleReferenceFileSelect = (files: FileList) => {
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const newReferenceImages: File[] = [];
+    const newReferencePreviews: string[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      
+      // Validate file type
+      if (!validTypes.includes(file.type)) {
+        setError('Please select valid image files (JPEG, PNG, or WebP) for reference images');
+        return;
+      }
+
+      // Validate file size (10MB limit)
+      if (file.size > 10 * 1024 * 1024) {
+        setError('Reference image file size must be less than 10MB');
+        return;
+      }
+
+      newReferenceImages.push(file);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        newReferencePreviews.push(e.target?.result as string);
+        if (newReferencePreviews.length === files.length) {
+          setReferencePreviews(prev => [...prev, ...newReferencePreviews]);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+
+    setError('');
+    setReferenceImages(prev => [...prev, ...newReferenceImages]);
+  };
+
+  const handleReferenceFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleReferenceFileSelect(e.target.files);
+    }
+  };
+
+  const removeReferenceImage = (index: number) => {
+    setReferenceImages(prev => prev.filter((_, i) => i !== index));
+    setReferencePreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async () => {
     if (!user) {
       setError('Please sign in to use AI image editing');
@@ -105,8 +156,15 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
     setResult(null);
 
     try {
-      // Convert image to base64
+      // Convert main image to base64
       const base64Image = await fileToBase64(selectedImage);
+      
+      // Convert reference images to base64
+      const referenceImagesBase64: string[] = [];
+      for (const refImage of referenceImages) {
+        const base64RefImage = await fileToBase64(refImage);
+        referenceImagesBase64.push(base64RefImage.split(',')[1]); // Remove data:image/... prefix
+      }
       
       // Use the same API base as other components
       const API_BASE = process.env.REACT_APP_API_URL || 'https://vicino.ai';
@@ -119,6 +177,17 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
         throw new Error('Authentication required. Please sign in again.');
       }
       
+      // Prepare request body
+      const requestBody: any = {
+        image: base64Image.split(',')[1], // Remove data:image/... prefix
+        instruction: instruction.trim()
+      };
+      
+      // Add reference images if any
+      if (referenceImagesBase64.length > 0) {
+        requestBody.reference_images = referenceImagesBase64;
+      }
+      
       // Call the Nano Banana API
       const response = await fetch(`${API_BASE}/api/nano/edit`, {
         method: 'POST',
@@ -126,10 +195,7 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          image: base64Image.split(',')[1], // Remove data:image/... prefix
-          instruction: instruction.trim()
-        })
+        body: JSON.stringify(requestBody)
       });
 
       const data = await response.json();
@@ -181,12 +247,17 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
 
   const resetForm = () => {
     setSelectedImage(null);
+    setReferenceImages([]);
     setImagePreview('');
+    setReferencePreviews([]);
     setInstruction('');
     setResult(null);
     setError('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+    if (referenceFileInputRef.current) {
+      referenceFileInputRef.current.value = '';
     }
   };
 
@@ -271,11 +342,75 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
                 className="hidden"
               />
               
-                             {error && (
-                 <div className="mt-4 p-3 bg-red-100 border border-red-300 rounded-lg text-red-700 text-sm animate-fade-in">
-                   {error}
-                 </div>
-               )}
+              {error && (
+                <div className="mt-4 p-3 bg-red-100 border border-red-300 rounded-lg text-red-700 text-sm animate-fade-in">
+                  {error}
+                </div>
+              )}
+            </div>
+
+            {/* Reference Images Upload */}
+            <div className="bg-white rounded-2xl shadow-xl p-6">
+              <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                🎯 Reference Images (Optional)
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Upload additional images to guide the AI's style or reference. Maximum 5 images.
+              </p>
+              
+              {/* Reference Images Preview */}
+              {referencePreviews.length > 0 && (
+                <div className="mb-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {referencePreviews.map((preview, index) => (
+                      <div key={index} className="relative group">
+                        <img 
+                          src={preview} 
+                          alt={`Reference ${index + 1}`} 
+                          className="w-full h-24 object-cover rounded-lg shadow-sm"
+                        />
+                        <button
+                          onClick={() => removeReferenceImage(index)}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Add Reference Images Button */}
+              <button
+                onClick={() => referenceFileInputRef.current?.click()}
+                disabled={referenceImages.length >= 5}
+                className={`w-full p-4 border-2 border-dashed rounded-xl text-center transition-all duration-200 ${
+                  referenceImages.length >= 5
+                    ? 'border-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'border-gray-300 hover:border-orange-400 hover:bg-orange-50 text-gray-600 hover:text-orange-600'
+                }`}
+              >
+                <div className="text-2xl mb-2">➕</div>
+                <p className="text-sm">
+                  {referenceImages.length >= 5 
+                    ? 'Maximum 5 reference images reached' 
+                    : 'Add Reference Images'
+                  }
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {referenceImages.length}/5 images
+                </p>
+              </button>
+              
+              <input
+                ref={referenceFileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleReferenceFileInput}
+                className="hidden"
+              />
             </div>
 
             {/* Instruction Input */}

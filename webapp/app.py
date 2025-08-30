@@ -2781,12 +2781,13 @@ def setup_nano_gemini():
         logger.error(f"❌ Nano Banana Gemini API configuration failed: {e}")
         return False, f"Gemini API configuration failed: {e}"
 
-def process_nano_image_with_gemini(image_bytes, edit_instruction):
+def process_nano_image_with_gemini(main_image_bytes, reference_images_bytes=None, edit_instruction=""):
     """
-    Process image using Gemini AI for Nano Banana.
+    Process image using Gemini AI for Nano Banana with support for multiple reference images.
     
     Args:
-        image_bytes: Raw image bytes
+        main_image_bytes: Raw image bytes of the main image to edit
+        reference_images_bytes: List of raw image bytes for reference images (optional)
         edit_instruction: Text instruction for editing
         
     Returns:
@@ -2796,18 +2797,33 @@ def process_nano_image_with_gemini(image_bytes, edit_instruction):
         # Create the model
         model = genai.GenerativeModel("gemini-2.5-flash-image-preview")
         
-        # Create image part using current SDK approach
-        image_part = {
+        # Create main image part
+        main_image_part = {
             "inline_data": {
-                "data": image_bytes,
+                "data": main_image_bytes,
                 "mime_type": "image/jpeg"
             }
         }
         
-        # Create content
-        contents = [image_part, edit_instruction]
+        # Start with main image
+        contents = [main_image_part]
         
-        logger.info(f"Nano Banana: Processing image with instruction: {edit_instruction}")
+        # Add reference images if provided
+        if reference_images_bytes:
+            for i, ref_image_bytes in enumerate(reference_images_bytes):
+                ref_image_part = {
+                    "inline_data": {
+                        "data": ref_image_bytes,
+                        "mime_type": "image/jpeg"
+                    }
+                }
+                contents.append(ref_image_part)
+        
+        # Add instruction
+        if edit_instruction:
+            contents.append(edit_instruction)
+        
+        logger.info(f"Nano Banana: Processing image with {len(contents)-1} reference images and instruction: {edit_instruction}")
         
         # Generate response
         response = model.generate_content(contents)
@@ -2853,11 +2869,12 @@ def nano_health_check():
 @app.route('/api/nano/edit', methods=['POST'])
 def nano_edit_image():
     """
-    Main endpoint for Nano Banana AI image editing.
+    Main endpoint for Nano Banana AI image editing with support for multiple reference images.
     
     Expected JSON payload:
     {
         "image": "base64_encoded_image",
+        "reference_images": ["base64_encoded_image1", "base64_encoded_image2", ...],  // optional
         "instruction": "Make this image look like a painting by Van Gogh"
     }
     
@@ -2914,28 +2931,58 @@ def nano_edit_image():
                 'error': 'Missing required fields: image and instruction'
             }), 400
         
-        # Decode base64 image
+        # Decode base64 main image
         try:
-            image_data = base64.b64decode(data['image'])
+            main_image_data = base64.b64decode(data['image'])
         except Exception as e:
             return jsonify({
                 'success': False,
-                'error': f'Invalid image data: {e}'
+                'error': f'Invalid main image data: {e}'
             }), 400
         
-        # Validate image
+        # Validate main image
         try:
-            image = Image.open(io.BytesIO(image_data))
+            image = Image.open(io.BytesIO(main_image_data))
             image.verify()
         except Exception as e:
             return jsonify({
                 'success': False,
-                'error': f'Invalid image format: {e}'
+                'error': f'Invalid main image format: {e}'
             }), 400
+        
+        # Process reference images if provided
+        reference_images_data = []
+        if 'reference_images' in data and data['reference_images']:
+            if not isinstance(data['reference_images'], list):
+                return jsonify({
+                    'success': False,
+                    'error': 'Reference images must be an array'
+                }), 400
+            
+            # Limit to 5 reference images to avoid overwhelming the model
+            if len(data['reference_images']) > 5:
+                return jsonify({
+                    'success': False,
+                    'error': 'Maximum 5 reference images allowed'
+                }), 400
+            
+            for i, ref_image_b64 in enumerate(data['reference_images']):
+                try:
+                    ref_image_data = base64.b64decode(ref_image_b64)
+                    # Validate reference image
+                    ref_image = Image.open(io.BytesIO(ref_image_data))
+                    ref_image.verify()
+                    reference_images_data.append(ref_image_data)
+                except Exception as e:
+                    return jsonify({
+                        'success': False,
+                        'error': f'Invalid reference image {i+1}: {e}'
+                    }), 400
         
         # Process image with Gemini
         success, result_data, error_message = process_nano_image_with_gemini(
-            image_data, 
+            main_image_data, 
+            reference_images_data if reference_images_data else None,
             data['instruction']
         )
         
