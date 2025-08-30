@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useGenerationStore } from '../stores/generationStore';
 
@@ -39,6 +39,11 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const referenceFileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+  
+  // Local state for 3D generation loading
+  const [isGenerating3D, setIsGenerating3D] = useState(false);
+  const [threeDGenerationStatus, setThreeDGenerationStatus] = useState<'idle' | 'running' | 'completed' | 'failed'>('idle');
+  const [threeDModelUrl, setThreeDModelUrl] = useState<string | null>(null);
 
   // Sample instructions for inspiration
   const sampleInstructions = [
@@ -253,6 +258,11 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
 
   const resetForm = () => {
     resetAIImageEdit();
+    // Reset 3D generation state
+    setIsGenerating3D(false);
+    setThreeDGenerationStatus('idle');
+    setThreeDModelUrl(null);
+    
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -269,6 +279,82 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    }
+  };
+
+  const generate3D = async () => {
+    if (!user) {
+      setError('Please sign in to generate 3D models');
+      return;
+    }
+
+    if (!result?.image) {
+      setError('No processed image available for 3D generation');
+      return;
+    }
+
+    setIsGenerating3D(true);
+    setThreeDGenerationStatus('running');
+    setError('');
+
+    try {
+      // Use the same API base as other components
+      const API_BASE = process.env.REACT_APP_API_URL || 'https://vicino.ai';
+      
+      // Get auth token
+      const { data: { session } } = await import('../lib/supabase').then(m => m.supabase.auth.getSession());
+      const token = session?.access_token;
+      
+      if (!token) {
+        throw new Error('Authentication required. Please sign in again.');
+      }
+      
+      // Convert base64 data URL to file
+      const base64Response = await fetch(result.image);
+      const blob = await base64Response.blob();
+      const imageFile = new File([blob], 'edited_image.png', { type: 'image/png' });
+      
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('image', imageFile);
+      
+      // Call the 3D generation API endpoint
+      const response = await fetch(`${API_BASE}/api/upload-single-image`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          // Don't set Content-Type header - let browser set it with boundary for FormData
+        },
+        body: formData
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Handle successful 3D generation
+        console.log('3D generation successful:', data);
+        setThreeDGenerationStatus('completed');
+        // Store the 3D model URL if available
+        if (data.model_url) {
+          setThreeDModelUrl(data.model_url);
+        }
+        // You can add more 3D result handling here
+      } else {
+        // Handle specific error cases
+        if (response.status === 401) {
+          setError('Authentication required. Please sign in again.');
+        } else if (response.status === 402) {
+          setError(`Insufficient credits. ${data.error}`);
+        } else {
+          setError(data.error || 'Failed to generate 3D model');
+          setThreeDGenerationStatus('failed');
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred during 3D generation');
+      setThreeDGenerationStatus('failed');
+    } finally {
+      setIsGenerating3D(false);
     }
   };
 
@@ -529,13 +615,91 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
                                 Image edited successfully!
                               </p>
                             </div>
-                            <button
-                              onClick={downloadResult}
-                              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors duration-200"
-                            >
-                              💾 Download
-                            </button>
+                            <div className="flex gap-3">
+                              <button
+                                onClick={downloadResult}
+                                className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors duration-200"
+                              >
+                                💾 Download
+                              </button>
+                              <button
+                                onClick={threeDGenerationStatus === 'completed' && threeDModelUrl ? 
+                                  () => window.open(threeDModelUrl, '_blank') : 
+                                  generate3D
+                                }
+                                disabled={isGenerating3D}
+                                className={`px-4 py-2 rounded-lg transition-colors duration-200 ${
+                                  isGenerating3D 
+                                    ? 'bg-blue-400 text-white cursor-not-allowed' 
+                                    : threeDGenerationStatus === 'completed' && threeDModelUrl
+                                    ? 'bg-green-500 text-white hover:bg-green-600'
+                                    : 'bg-blue-500 text-white hover:bg-blue-600'
+                                }`}
+                              >
+                                {isGenerating3D ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white inline-block mr-2"></div>
+                                    Generating 3D...
+                                  </>
+                                ) : threeDGenerationStatus === 'completed' && threeDModelUrl ? (
+                                  '🎨 View 3D in Studio'
+                                ) : threeDGenerationStatus === 'failed' ? (
+                                  '🎨 Retry 3D Generation'
+                                ) : (
+                                  '🎨 Generate 3D'
+                                )}
+                              </button>
+                            </div>
                           </div>
+                          
+                          {/* 3D Generation Status Display */}
+                          {threeDGenerationStatus === 'running' && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4 animate-fade-in">
+                              <div className="flex items-center space-x-3">
+                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                                <div>
+                                  <p className="text-blue-800 font-medium">
+                                    🎨 Generating 3D Model...
+                                  </p>
+                                  <p className="text-blue-600 text-sm">
+                                    This process may take several minutes. Please wait...
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {threeDGenerationStatus === 'completed' && threeDModelUrl && (
+                            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-4 animate-fade-in">
+                              <div className="flex items-center space-x-3">
+                                <div className="text-green-600 text-2xl">✅</div>
+                                <div>
+                                  <p className="text-green-800 font-medium">
+                                    🎨 3D Model Generated Successfully!
+                                  </p>
+                                  <p className="text-green-600 text-sm">
+                                    Click "View 3D in Studio" to open your 3D model.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {threeDGenerationStatus === 'failed' && (
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-4 animate-fade-in">
+                              <div className="flex items-center space-x-3">
+                                <div className="text-red-600 text-2xl">❌</div>
+                                <div>
+                                  <p className="text-red-800 font-medium">
+                                    🎨 3D Generation Failed
+                                  </p>
+                                  <p className="text-red-600 text-sm">
+                                    Click "Retry 3D Generation" to try again.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </>
                     ) : (
