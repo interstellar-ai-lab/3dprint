@@ -1,44 +1,53 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useGenerationStore } from '../stores/generationStore';
 
 interface NanoBananaProps {
   onClose?: () => void;
 }
 
-interface EditResult {
-  success: boolean;
-  image?: string;
-  filename?: string;
-  timestamp?: string;
-  error?: string;
-}
-
 export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
   const { user } = useAuth();
-  const [selectedImage, setSelectedImage] = useState<File | null>(null);
-  const [referenceImages, setReferenceImages] = useState<File[]>([]);
-  const [imagePreview, setImagePreview] = useState<string>('');
-  const [referencePreviews, setReferencePreviews] = useState<string[]>([]);
-  const [instruction, setInstruction] = useState('Create a 1/7 scale commercialized figure of thecharacter in the illustration, in a realistic styie and environment. Place the figure on a computer desk, using a circular transparent acrylic base without any text.On the computer screen, display the ZBrush modeling process of the figure. Next to the computer screen, place a BANDAl-style toy packaging box printedwith the original artwork');
-  const [result, setResult] = useState<EditResult | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [dragActive, setDragActive] = useState(false);
-  const [error, setError] = useState<string>('');
-  
+  const {
+    aiImageEdit,
+    setSelectedImage,
+    setReferenceImages,
+    setImagePreview,
+    setReferencePreviews,
+    setInstruction,
+    setResult,
+    setIsProcessing,
+    setError,
+    setDragActive,
+    resetAIImageEdit,
+    addReferenceImage,
+    removeReferenceImage
+  } = useGenerationStore();
+
+  const {
+    selectedImage,
+    referenceImages,
+    imagePreview,
+    referencePreviews,
+    instruction,
+    result,
+    isProcessing,
+    error,
+    dragActive
+  } = aiImageEdit;
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const referenceFileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
   // Sample instructions for inspiration
   const sampleInstructions = [
+    "Optimize this image for 3D reconstruction with clear edges, consistent lighting, and detailed textures",
     "Make this image look like a painting by Vincent van Gogh, with swirling brushstrokes and vibrant colors",
     "Transform this into a cyberpunk style with neon lights and futuristic elements",
     "Convert this to a watercolor painting with soft, flowing colors",
     "Make this look like it was taken in the 1980s with retro styling",
     "Transform this into a fantasy landscape with magical elements and glowing effects",
-    "Convert this to a black and white film noir style with dramatic shadows",
-    "Make this look like a comic book illustration with bold colors and outlines",
-    "Transform this into a dreamy, ethereal scene with soft lighting and pastel tones"
   ];
 
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -49,7 +58,7 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
     } else if (e.type === "dragleave") {
       setDragActive(false);
     }
-  }, []);
+  }, [setDragActive]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -59,7 +68,7 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFileSelect(e.dataTransfer.files[0]);
     }
-  }, []);
+  }, [setDragActive]);
 
   const handleFileSelect = (file: File) => {
     // Validate file type
@@ -119,25 +128,22 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
       reader.onload = (e) => {
         newReferencePreviews.push(e.target?.result as string);
         if (newReferencePreviews.length === files.length) {
-          setReferencePreviews(prev => [...prev, ...newReferencePreviews]);
+          // Add all reference images to the store
+          newReferenceImages.forEach((img, idx) => {
+            addReferenceImage(img, newReferencePreviews[idx]);
+          });
         }
       };
       reader.readAsDataURL(file);
     }
 
     setError('');
-    setReferenceImages(prev => [...prev, ...newReferenceImages]);
   };
 
   const handleReferenceFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       handleReferenceFileSelect(e.target.files);
     }
-  };
-
-  const removeReferenceImage = (index: number) => {
-    setReferenceImages(prev => prev.filter((_, i) => i !== index));
-    setReferencePreviews(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async () => {
@@ -246,13 +252,7 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
   };
 
   const resetForm = () => {
-    setSelectedImage(null);
-    setReferenceImages([]);
-    setImagePreview('');
-    setReferencePreviews([]);
-    setInstruction('');
-    setResult(null);
-    setError('');
+    resetAIImageEdit();
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -276,12 +276,12 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
     <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50 py-8 px-4">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-                  <div className="text-center mb-12">
-            <div className="inline-block mb-6 animate-fade-in">
-              <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-                AI Image Editor
-              </h1>
-            </div>
+        <div className="text-center mb-12">
+          <div className="inline-block mb-6 animate-fade-in">
+            <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+              AI Image Editor
+            </h1>
+          </div>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto animate-fade-in-delay">
             Transform your images with AI magic.
             Upload an image, describe your vision, and watch the magic happen!
@@ -494,19 +494,19 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
                 🎨 Your Edited Image
               </h3>
               
-                             <div className="transition-all duration-300">
-                 {isProcessing ? (
-                   <div className="flex flex-col items-center justify-center h-80 text-center animate-fade-in">
-                     <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-orange-500 mb-4"></div>
-                     <h4 className="text-lg font-semibold text-gray-700 mb-2">
-                       AI is working its magic! ✨
-                     </h4>
-                     <p className="text-gray-600">
-                       This usually takes 10-30 seconds...
-                     </p>
-                   </div>
-                 ) : result ? (
-                   <div className="space-y-4 animate-fade-in">
+              <div className="transition-all duration-300">
+                {isProcessing ? (
+                  <div className="flex flex-col items-center justify-center h-80 text-center animate-fade-in">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-orange-500 mb-4"></div>
+                    <h4 className="text-lg font-semibold text-gray-700 mb-2">
+                      AI is working its magic! ✨
+                    </h4>
+                    <p className="text-gray-600">
+                      This usually takes 10-30 seconds...
+                    </p>
+                  </div>
+                ) : result ? (
+                  <div className="space-y-4 animate-fade-in">
                     {result.success ? (
                       <>
                         <div className="relative">
@@ -556,18 +556,18 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
                       </div>
                     )}
                   </div>
-                                 ) : (
-                   <div className="flex flex-col items-center justify-center h-80 text-center text-gray-500 animate-fade-in">
-                     <div className="text-6xl mb-4">🎨</div>
-                     <h4 className="text-lg font-semibold mb-2">
-                       Ready to Transform?
-                     </h4>
-                     <p>
-                       Upload an image and describe your vision to see the magic happen!
-                     </p>
-                   </div>
-                 )}
-               </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-80 text-center text-gray-500 animate-fade-in">
+                    <div className="text-6xl mb-4">🎨</div>
+                    <h4 className="text-lg font-semibold mb-2">
+                      Ready to Transform?
+                    </h4>
+                    <p>
+                      Upload an image and describe your vision to see the magic happen!
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Info Panel */}
@@ -581,15 +581,15 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
           </div>
         </div>
 
-                 {/* Close Button */}
-         {onClose && (
-           <button
-             onClick={onClose}
-             className="fixed top-6 right-6 p-3 bg-white rounded-full shadow-lg hover:shadow-xl transition-shadow duration-200 animate-fade-in-delay"
-           >
-             <span className="text-2xl">✕</span>
-           </button>
-         )}
+        {/* Close Button */}
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="fixed top-6 right-6 p-3 bg-white rounded-full shadow-lg hover:shadow-xl transition-shadow duration-200 animate-fade-in-delay"
+          >
+            <span className="text-2xl">✕</span>
+          </button>
+        )}
       </div>
     </div>
   );
