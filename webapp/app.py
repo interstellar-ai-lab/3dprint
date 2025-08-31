@@ -1743,14 +1743,17 @@ def process_successful_job(info, task_id, session_id, iteration, target_object, 
                     logger.warning("⚠️ Using original GLB data due to cleaning issues")
                     cleaned_glb_data = glb_data
                 
+                # Validate that the cleaned GLB data is still a valid GLB file
+                if not cleaned_glb_data.startswith(b'glTF'):
+                    logger.warning("⚠️ Cleaned GLB data is not valid, using original data")
+                    cleaned_glb_data = glb_data
+                
                 # Upload to Supabase 3D files bucket
                 sanitized_object_name = sanitize_filename(target_object)
                 glb_filename = f"{sanitized_object_name}_{iteration}_{timestamp}.glb"
-                glb_supabase_url = upload_image_to_supabase(
+                glb_supabase_url = upload_glb_to_supabase(
                     cleaned_glb_data, 
-                    glb_filename, 
-                    content_type="model/gltf-binary",
-                    bucket_name="generated-3d-files"
+                    glb_filename
                 )
                 
                 if glb_supabase_url:
@@ -2011,7 +2014,7 @@ def get_generation_status(record_id):
             return jsonify({"error": "Database not available"}), 500
         
         # Add retry logic for database connection issues
-        max_retries = 3
+        max_retries = 5
         for attempt in range(max_retries):
             try:
                 result = supabase_client.table('generated_images').select('*').eq('id', record_id).execute()
@@ -3068,6 +3071,170 @@ def check_user_exists():
     except Exception as e:
         logger.error(f"❌ Check user error: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
+
+def upload_glb_to_supabase(glb_data: bytes, filename: str, bucket_name: str = "generated-3d-files") -> Optional[str]:
+    """Upload GLB file to Supabase storage bucket using service key"""
+    if not SUPABASE_AVAILABLE or not supabase_client:
+        logger.warning("⚠️ Supabase not available, skipping GLB upload")
+        return None
+    
+    try:
+        # Validate GLB data
+        if not glb_data or len(glb_data) == 0:
+            logger.error("❌ Empty GLB data provided")
+            return None
+        
+        # Validate GLB format (GLB files start with 'glTF' magic number)
+        if len(glb_data) < 12 or not glb_data.startswith(b'glTF'):
+            logger.error("❌ Invalid GLB format: File does not start with 'glTF' magic number")
+            logger.error(f"   - First 4 bytes: {glb_data[:4] if len(glb_data) >= 4 else 'insufficient data'}")
+            logger.error(f"   - File size: {len(glb_data)} bytes")
+            return None
+        
+        # Check minimum GLB size (should be at least 12 bytes for header)
+        if len(glb_data) < 12:
+            logger.error("❌ GLB file too small: Must be at least 12 bytes")
+            return None
+        
+        # Log upload attempt
+        logger.info(f"📤 Attempting to upload {len(glb_data)} bytes to Supabase bucket '{bucket_name}' as {filename}")
+        logger.info(f"   - GLB header: {glb_data[:12].hex()}")
+        
+        # For large files, try chunked upload or smaller chunks
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"🔄 Upload attempt {attempt + 1}/{max_retries}")
+                
+                # Upload to Supabase storage using service key
+                response = supabase_client.storage.from_(bucket_name).upload(
+                    path=filename,
+                    file=glb_data,
+                    file_options={"content-type": "model/gltf-binary"}
+                )
+                
+                if response:
+                    # Generate public URL
+                    public_url = f"{SUPABASE_URL}/storage/v1/object/public/{bucket_name}/{filename}"
+                    logger.info(f"✅ Uploaded GLB to Supabase bucket '{bucket_name}': {public_url}")
+                    return public_url
+                else:
+                    logger.error("❌ Failed to upload GLB to Supabase - no response")
+                    if attempt < max_retries - 1:
+                        logger.info("🔄 Retrying upload...")
+                        import time
+                        time.sleep(2 ** attempt)  # Exponential backoff
+                        continue
+                    return None
+                    
+            except Exception as e:
+                logger.error(f"❌ Error uploading GLB to Supabase (attempt {attempt + 1}): {e}")
+                
+                # Handle specific SSL errors
+                if "SSL" in str(e) or "protocol" in str(e).lower() or "EOF" in str(e):
+                    logger.error("🔒 SSL/Protocol error detected. This may be due to:")
+                    logger.error("   - Large file size causing connection issues")
+                    logger.error("   - Network connectivity issues")
+                    logger.error("   - Supabase service issues")
+                    
+                    # Try to validate the GLB data
+                    try:
+                        if glb_data.startswith(b'glTF'):
+                            logger.info("✅ GLB validation successful: Valid GLB header detected")
+                            logger.info(f"   - GLB size: {len(glb_data)} bytes")
+                            logger.info(f"   - GLB header: {glb_data[:12].hex()}")
+                        else:
+                            logger.error("❌ GLB validation failed: Invalid GLB header")
+                            logger.error(f"   - First 4 bytes: {glb_data[:4]}")
+                    except Exception as glb_error:
+                        logger.error(f"❌ GLB validation failed: {glb_error}")
+                    
+                    # If this is the last attempt, try alternative upload method
+                    if attempt == max_retries - 1:
+                        logger.info("🔄 Trying alternative upload method...")
+                        return _try_alternative_glb_upload(glb_data, filename, bucket_name)
+                    
+                    # Wait before retry with exponential backoff
+                    import time
+                    time.sleep(2 ** attempt)
+                    continue
+                
+                # For other errors, retry if possible
+                if attempt < max_retries - 1:
+                    logger.info("🔄 Retrying upload...")
+                    import time
+                    time.sleep(2 ** attempt)
+                    continue
+                else:
+                    return None
+        
+        return None
+            
+    except Exception as e:
+        logger.error(f"❌ Unexpected error in upload_glb_to_supabase: {e}")
+        return None
+
+def _try_alternative_glb_upload(glb_data: bytes, filename: str, bucket_name: str) -> Optional[str]:
+    """Alternative GLB upload method using different approach"""
+    try:
+        logger.info("🔄 Attempting alternative GLB upload method...")
+        
+        # Try using a different upload approach - maybe the issue is with the file size
+        # For very large files, we might need to handle them differently
+        
+        # Method 1: Try with different file options
+        try:
+            response = supabase_client.storage.from_(bucket_name).upload(
+                path=filename,
+                file=glb_data,
+                file_options={
+                    "content-type": "model/gltf-binary",
+                    "upsert": True  # Try upsert mode
+                }
+            )
+            
+            if response:
+                public_url = f"{SUPABASE_URL}/storage/v1/object/public/{bucket_name}/{filename}"
+                logger.info(f"✅ Alternative upload method successful: {public_url}")
+                return public_url
+        except Exception as e:
+            logger.warning(f"⚠️ Alternative method 1 failed: {e}")
+        
+        # Method 2: Try with different content type
+        try:
+            response = supabase_client.storage.from_(bucket_name).upload(
+                path=filename,
+                file=glb_data,
+                file_options={"content-type": "application/octet-stream"}
+            )
+            
+            if response:
+                public_url = f"{SUPABASE_URL}/storage/v1/object/public/{bucket_name}/{filename}"
+                logger.info(f"✅ Alternative upload method 2 successful: {public_url}")
+                return public_url
+        except Exception as e:
+            logger.warning(f"⚠️ Alternative method 2 failed: {e}")
+        
+        # Method 3: Try without file options
+        try:
+            response = supabase_client.storage.from_(bucket_name).upload(
+                path=filename,
+                file=glb_data
+            )
+            
+            if response:
+                public_url = f"{SUPABASE_URL}/storage/v1/object/public/{bucket_name}/{filename}"
+                logger.info(f"✅ Alternative upload method 3 successful: {public_url}")
+                return public_url
+        except Exception as e:
+            logger.warning(f"⚠️ Alternative method 3 failed: {e}")
+        
+        logger.error("❌ All alternative upload methods failed")
+        return None
+        
+    except Exception as e:
+        logger.error(f"❌ Error in alternative upload method: {e}")
+        return None
 
 if __name__ == '__main__':
     # For production deployment on EC2

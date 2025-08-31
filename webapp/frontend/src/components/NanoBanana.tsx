@@ -1,9 +1,19 @@
-import React, { useRef, useCallback, useState } from 'react';
+import React, { useRef, useCallback, useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useGenerationStore } from '../stores/generationStore';
 
 interface NanoBananaProps {
   onClose?: () => void;
+}
+
+interface GenerationStatus {
+  status: string;
+  task_id?: string;
+  error_message?: string;
+  created_at: string;
+  updated_at: string;
+  '3d_url'?: string;
+  image_url?: string;
 }
 
 export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
@@ -40,10 +50,84 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
   const referenceFileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
   
-  // Local state for 3D generation loading
+  // Local state for 3D generation
   const [isGenerating3D, setIsGenerating3D] = useState(false);
-  const [threeDGenerationStatus, setThreeDGenerationStatus] = useState<'idle' | 'running' | 'completed' | 'failed'>('idle');
+  const [threeDGenerationStatus, setThreeDGenerationStatus] = useState<'idle' | 'pending' | 'running' | 'completed' | 'failed'>('idle');
   const [threeDModelUrl, setThreeDModelUrl] = useState<string | null>(null);
+  const [threeDRecordId, setThreeDRecordId] = useState<number | null>(null);
+  const [threeDStatusData, setThreeDStatusData] = useState<GenerationStatus | null>(null);
+
+  // API base URL
+  const API_BASE = process.env.REACT_APP_API_URL || 'https://vicino.ai';
+
+  // Button state logic
+  const isEnabled = result?.image && user && (
+    threeDGenerationStatus === 'idle' || 
+    threeDGenerationStatus === 'completed' || 
+    threeDGenerationStatus === 'failed'
+  );
+
+  // Check if we should show the retry button
+  const shouldShowRetry = threeDGenerationStatus === 'failed';
+
+  // Status polling effect
+  useEffect(() => {
+    if (!threeDRecordId || threeDGenerationStatus === 'completed' || threeDGenerationStatus === 'failed') {
+      return;
+    }
+
+    const pollStatus = async () => {
+      try {
+        const { data: { session } } = await import('../lib/supabase').then(m => m.supabase.auth.getSession());
+        const token = session?.access_token;
+        
+        if (!token) {
+          console.error('No auth token available for status polling');
+          return;
+        }
+
+        const response = await fetch(`${API_BASE}/api/generation-status/${threeDRecordId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch status');
+        }
+
+        const statusData: GenerationStatus = await response.json();
+        setThreeDStatusData(statusData);
+        
+        // Update status based on response
+        if (statusData.status === 'completed') {
+          setThreeDGenerationStatus('completed');
+          if (statusData['3d_url']) {
+            setThreeDModelUrl(statusData['3d_url']);
+          } else {
+            // If no 3D URL in status, use the studio URL as fallback
+            setThreeDModelUrl('/studio');
+          }
+        } else if (statusData.status === 'failed') {
+          setThreeDGenerationStatus('failed');
+        } else if (statusData.status === 'running') {
+          setThreeDGenerationStatus('running');
+        } else if (statusData.status === 'pending') {
+          setThreeDGenerationStatus('pending');
+        }
+      } catch (error) {
+        console.error('Error polling status:', error);
+      }
+    };
+
+    // Poll every 5 seconds
+    const interval = setInterval(pollStatus, 5000);
+    
+    // Initial poll
+    pollStatus();
+
+    return () => clearInterval(interval);
+  }, [threeDRecordId, threeDGenerationStatus, API_BASE]);
 
   // Sample instructions for inspiration
   const sampleInstructions = [
@@ -262,6 +346,8 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
     setIsGenerating3D(false);
     setThreeDGenerationStatus('idle');
     setThreeDModelUrl(null);
+    setThreeDRecordId(null);
+    setThreeDStatusData(null);
     
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -293,9 +379,15 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
       return;
     }
 
-    setIsGenerating3D(true);
-    setThreeDGenerationStatus('running');
+    // Reset 3D generation state
+    setThreeDGenerationStatus('idle');
+    setThreeDModelUrl(null);
+    setThreeDRecordId(null);
+    setThreeDStatusData(null);
     setError('');
+
+    setIsGenerating3D(true);
+    setThreeDGenerationStatus('pending'); // Start with pending
 
     try {
       // Use the same API base as other components
@@ -309,10 +401,41 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
         throw new Error('Authentication required. Please sign in again.');
       }
       
-      // Convert base64 data URL to file
+      // Convert base64 data URL to file with proper format handling
       const base64Response = await fetch(result.image);
       const blob = await base64Response.blob();
-      const imageFile = new File([blob], 'edited_image.png', { type: 'image/png' });
+      
+      let imageFile: File;
+      
+      // Ensure we have a proper image blob
+      if (!blob.type.startsWith('image/')) {
+        // If blob type is not an image, create a proper PNG blob
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = result.image!;
+        });
+        
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx?.drawImage(img, 0, 0);
+        
+        // Convert canvas to blob with proper PNG format
+        const pngBlob = await new Promise<Blob>((resolve) => {
+          canvas.toBlob((blob) => {
+            resolve(blob!);
+          }, 'image/png', 0.95);
+        });
+        
+        imageFile = new File([pngBlob], 'edited_image.png', { type: 'image/png' });
+      } else {
+        // Use the original blob if it's already an image
+        imageFile = new File([blob], 'edited_image.png', { type: blob.type });
+      }
       
       // Create FormData for file upload
       const formData = new FormData();
@@ -330,23 +453,20 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
 
       const data = await response.json();
       
-      if (data.success) {
-        // Handle successful 3D generation
-        console.log('3D generation successful:', data);
-        setThreeDGenerationStatus('completed');
-        // Store the 3D model URL if available
-        if (data.model_url) {
-          setThreeDModelUrl(data.model_url);
-        }
-        // You can add more 3D result handling here
+      if (response.ok && data.record_id) {
+        // Handle successful 3D generation start
+        console.log('3D generation started:', data);
+        setThreeDRecordId(data.record_id); // Store the record ID for polling
+        setThreeDGenerationStatus('pending'); // Start with pending status
+        // The status polling will handle the rest
       } else {
         // Handle specific error cases
         if (response.status === 401) {
           setError('Authentication required. Please sign in again.');
         } else if (response.status === 402) {
-          setError(`Insufficient credits. ${data.error}`);
+          setError(`Insufficient credits. ${data.error || 'Please add funds to your wallet.'}`);
         } else {
-          setError(data.error || 'Failed to generate 3D model');
+          setError(data.error || 'Failed to start 3D generation');
           setThreeDGenerationStatus('failed');
         }
       }
@@ -624,27 +744,34 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
                               </button>
                               <button
                                 onClick={threeDGenerationStatus === 'completed' && threeDModelUrl ? 
-                                  () => window.open(threeDModelUrl, '_blank') : 
+                                  () => {
+                                    // Open studio in a new tab
+                                    const baseUrl = process.env.REACT_APP_BASE_URL || window.location.origin;
+                                    const studioUrl = `${baseUrl}/studio`;
+                                    window.open(studioUrl, '_blank');
+                                  } : 
                                   generate3D
                                 }
-                                disabled={isGenerating3D}
+                                disabled={!isEnabled}
                                 className={`px-4 py-2 rounded-lg transition-colors duration-200 ${
-                                  isGenerating3D 
-                                    ? 'bg-blue-400 text-white cursor-not-allowed' 
-                                    : threeDGenerationStatus === 'completed' && threeDModelUrl
-                                    ? 'bg-green-500 text-white hover:bg-green-600'
-                                    : 'bg-blue-500 text-white hover:bg-blue-600'
+                                  isEnabled
+                                    ? threeDGenerationStatus === 'completed' && threeDModelUrl
+                                      ? 'bg-green-500 text-white hover:bg-green-600'
+                                      : 'bg-blue-500 text-white hover:bg-blue-600'
+                                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                 }`}
                               >
-                                {isGenerating3D ? (
-                                  <>
+                                {isGenerating3D || threeDGenerationStatus === 'pending' || threeDGenerationStatus === 'running' ? (
+                                  <div className="flex items-center justify-center">
                                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white inline-block mr-2"></div>
-                                    Generating 3D...
-                                  </>
+                                    {threeDGenerationStatus === 'pending' ? 'Starting Generation...' : 
+                                     threeDGenerationStatus === 'running' ? '3D Generation in Progress...' : 
+                                     'Starting Generation...'}
+                                  </div>
                                 ) : threeDGenerationStatus === 'completed' && threeDModelUrl ? (
                                   '🎨 View 3D in Studio'
                                 ) : threeDGenerationStatus === 'failed' ? (
-                                  '🎨 Retry 3D Generation'
+                                  '🔄 Retry 3D Generation'
                                 ) : (
                                   '🎨 Generate 3D'
                                 )}
@@ -653,17 +780,82 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
                           </div>
                           
                           {/* 3D Generation Status Display */}
-                          {threeDGenerationStatus === 'running' && (
+                          {(threeDGenerationStatus === 'pending' || threeDGenerationStatus === 'running') && (
                             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4 animate-fade-in">
                               <div className="flex items-center space-x-3">
                                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
                                 <div>
                                   <p className="text-blue-800 font-medium">
-                                    🎨 Generating 3D Model...
+                                    🎨 {threeDGenerationStatus === 'pending' ? 'Starting 3D Generation...' : 'Generating 3D Model...'}
                                   </p>
                                   <p className="text-blue-600 text-sm">
-                                    This process may take several minutes. Please wait...
+                                    {threeDGenerationStatus === 'pending' 
+                                      ? 'Initializing the generation process...' 
+                                      : 'This process may take several minutes. Please wait...'
+                                    }
                                   </p>
+                                  {threeDStatusData?.created_at && (
+                                    <p className="text-blue-500 text-xs mt-1">
+                                      Started: {new Date(threeDStatusData.created_at).toLocaleString()}
+                                    </p>
+                                  )}
+                                  {threeDStatusData?.task_id && (
+                                    <p className="text-blue-500 text-xs mt-1">
+                                      Task ID: {threeDStatusData.task_id}
+                                    </p>
+                                  )}
+                                  
+                                  {/* Progress Bar */}
+                                  <div className="mt-3">
+                                    <div className="bg-gray-200 rounded-full h-2">
+                                      <div 
+                                        className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-1000 ease-out"
+                                        style={{ 
+                                          width: `${threeDGenerationStatus === 'pending' ? 25 : 
+                                                  threeDGenerationStatus === 'running' ? 60 : 0}%` 
+                                        }}
+                                      ></div>
+                                    </div>
+                                    <p className="text-xs text-blue-500 mt-1">
+                                      Progress: {threeDGenerationStatus === 'pending' ? '25%' : 
+                                                 threeDGenerationStatus === 'running' ? '60%' : '0%'}
+                                    </p>
+                                  </div>
+                                  
+                                  {/* Estimated Time */}
+                                  <p className="text-blue-500 text-xs mt-2">
+                                    {threeDGenerationStatus === 'pending' 
+                                      ? 'Estimated time: 1-2 minutes' 
+                                      : 'Estimated time: 3-5 minutes'
+                                    }
+                                  </p>
+                                  
+                                  {/* Cancel Button for Running Jobs */}
+                                  {threeDGenerationStatus === 'running' && (
+                                    <button
+                                      onClick={() => {
+                                        // Note: This would need a cancel endpoint in the backend
+                                        alert('Cancel functionality not yet implemented. Please wait for completion or contact support.');
+                                      }}
+                                      className="mt-2 px-3 py-1 bg-yellow-500 text-white text-xs rounded hover:bg-yellow-600 transition-colors"
+                                    >
+                                      Cancel Generation
+                                    </button>
+                                  )}
+                                  
+                                  {/* Generation Details */}
+                                  <details className="mt-3">
+                                    <summary className="text-blue-500 text-xs cursor-pointer hover:text-blue-600">
+                                      Show Generation Details
+                                    </summary>
+                                    <div className="mt-2 p-2 bg-blue-50 rounded text-xs text-blue-700">
+                                      <p><strong>Status:</strong> {threeDGenerationStatus}</p>
+                                      <p><strong>Task ID:</strong> {threeDStatusData?.task_id || 'N/A'}</p>
+                                      <p><strong>Started:</strong> {threeDStatusData?.created_at ? new Date(threeDStatusData.created_at).toLocaleString() : 'N/A'}</p>
+                                      <p><strong>Last Updated:</strong> {threeDStatusData?.updated_at ? new Date(threeDStatusData.updated_at).toLocaleString() : 'N/A'}</p>
+                                      <p><strong>Progress:</strong> {threeDGenerationStatus === 'pending' ? '25%' : threeDGenerationStatus === 'running' ? '60%' : '0%'}</p>
+                                    </div>
+                                  </details>
                                 </div>
                               </div>
                             </div>
@@ -680,6 +872,67 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
                                   <p className="text-green-600 text-sm">
                                     Click "View 3D in Studio" to open your 3D model.
                                   </p>
+                                  {threeDStatusData?.updated_at && (
+                                    <p className="text-green-500 text-xs mt-1">
+                                      Completed: {new Date(threeDStatusData.updated_at).toLocaleString()}
+                                    </p>
+                                  )}
+                                  {threeDStatusData?.task_id && (
+                                    <p className="text-green-500 text-xs mt-1">
+                                      Task ID: {threeDStatusData.task_id}
+                                    </p>
+                                  )}
+                                  {threeDStatusData?.image_url && (
+                                    <p className="text-green-500 text-xs mt-1">
+                                      Preview: <a href={threeDStatusData.image_url} target="_blank" rel="noopener noreferrer" className="underline">View Image</a>
+                                    </p>
+                                  )}
+                                  
+                                  {/* Action Buttons */}
+                                  <div className="flex gap-2 mt-2">
+                                    <button
+                                      onClick={() => {
+                                        // Open studio in a new tab
+                                        const baseUrl = process.env.REACT_APP_BASE_URL || window.location.origin;
+                                        const studioUrl = `${baseUrl}/studio`;
+                                        window.open(studioUrl, '_blank');
+                                      }}
+                                      className="px-3 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 transition-colors"
+                                    >
+                                      Open in Studio
+                                    </button>
+                                    {threeDModelUrl && threeDModelUrl !== '/studio' && (
+                                      <button
+                                        onClick={() => {
+                                          // Download the 3D model if it's a direct URL
+                                          const link = document.createElement('a');
+                                          link.href = threeDModelUrl;
+                                          link.download = '3d_model.glb';
+                                          document.body.appendChild(link);
+                                          link.click();
+                                          document.body.removeChild(link);
+                                        }}
+                                        className="px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-colors"
+                                      >
+                                        Download 3D Model
+                                      </button>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Generation Details */}
+                                  <details className="mt-3">
+                                    <summary className="text-green-500 text-xs cursor-pointer hover:text-green-600">
+                                      Show Generation Details
+                                    </summary>
+                                    <div className="mt-2 p-2 bg-green-50 rounded text-xs text-green-700">
+                                      <p><strong>Status:</strong> {threeDGenerationStatus}</p>
+                                      <p><strong>Task ID:</strong> {threeDStatusData?.task_id || 'N/A'}</p>
+                                      <p><strong>Started:</strong> {threeDStatusData?.created_at ? new Date(threeDStatusData.created_at).toLocaleString() : 'N/A'}</p>
+                                      <p><strong>Completed:</strong> {threeDStatusData?.updated_at ? new Date(threeDStatusData.updated_at).toLocaleString() : 'N/A'}</p>
+                                      <p><strong>3D Model URL:</strong> {threeDModelUrl || 'N/A'}</p>
+                                      <p><strong>Preview Image:</strong> {threeDStatusData?.image_url || 'N/A'}</p>
+                                    </div>
+                                  </details>
                                 </div>
                               </div>
                             </div>
@@ -694,8 +947,57 @@ export const NanoBanana: React.FC<NanoBananaProps> = ({ onClose }) => {
                                     🎨 3D Generation Failed
                                   </p>
                                   <p className="text-red-600 text-sm">
-                                    Click "Retry 3D Generation" to try again.
+                                    {threeDStatusData?.error_message || 'The generation process encountered an error. Please try again.'}
                                   </p>
+                                  {threeDStatusData?.task_id && (
+                                    <p className="text-red-500 text-xs mt-1">
+                                      Task ID: {threeDStatusData.task_id}
+                                    </p>
+                                  )}
+                                  {threeDStatusData?.created_at && (
+                                    <p className="text-red-500 text-xs mt-1">
+                                      Started: {new Date(threeDStatusData.created_at).toLocaleString()}
+                                    </p>
+                                  )}
+                                  <div className="flex gap-2 mt-2">
+                                    <button
+                                      onClick={() => {
+                                        setThreeDGenerationStatus('idle');
+                                        setThreeDModelUrl(null);
+                                        setThreeDRecordId(null);
+                                        setThreeDStatusData(null);
+                                        generate3D();
+                                      }}
+                                      className="px-3 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition-colors"
+                                    >
+                                      Retry Generation
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        // Copy error details to clipboard for support
+                                        const errorDetails = `Task ID: ${threeDStatusData?.task_id || 'N/A'}\nError: ${threeDStatusData?.error_message || 'Unknown error'}\nStarted: ${threeDStatusData?.created_at || 'N/A'}`;
+                                        navigator.clipboard.writeText(errorDetails);
+                                        alert('Error details copied to clipboard. Please contact support with this information.');
+                                      }}
+                                      className="px-3 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600 transition-colors"
+                                    >
+                                      Copy Error Details
+                                    </button>
+                                  </div>
+                                  
+                                  {/* Generation Details */}
+                                  <details className="mt-3">
+                                    <summary className="text-red-500 text-xs cursor-pointer hover:text-red-600">
+                                      Show Generation Details
+                                    </summary>
+                                    <div className="mt-2 p-2 bg-red-50 rounded text-xs text-red-700">
+                                      <p><strong>Status:</strong> {threeDGenerationStatus}</p>
+                                      <p><strong>Task ID:</strong> {threeDStatusData?.task_id || 'N/A'}</p>
+                                      <p><strong>Started:</strong> {threeDStatusData?.created_at ? new Date(threeDStatusData.created_at).toLocaleString() : 'N/A'}</p>
+                                      <p><strong>Failed:</strong> {threeDStatusData?.updated_at ? new Date(threeDStatusData.updated_at).toLocaleString() : 'N/A'}</p>
+                                      <p><strong>Error Message:</strong> {threeDStatusData?.error_message || 'Unknown error'}</p>
+                                    </div>
+                                  </details>
                                 </div>
                               </div>
                             </div>
